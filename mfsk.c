@@ -56,6 +56,6 @@ int send_2fsk(char current_char){
 int mfsk_test_bits(char *buffer){
   // Add some test bits into the MFSK buffer, compatible with the first 200 test bits produced by fsk_get_test_bits from codec2-dev.
   // Decode using (with GQRX outputting data to UDP): nc -l -u localhost 7355 | ./fsk_demod 4 48000 100 - - | ./fsk_put_test_bits -
-  sprintf(buffer, "\x1b\x1b\x1b\x1b\xd8\x2c\xa2\x56\x3f\x4c\x08\xa2\xba\x6f\x84\x07\x6d\x82\xca\x25\x63\xf4\xc0\x8a\x2b\xa6\xf8\x40\x76");
+  sprintf(buffer, "%s", "\x1b\x1b\x1b\x1b\xd8\x2c\xa2\x56\x3f\x4c\x08\xa2\xba\x6f\x84\x07\x6d\x82\xca\x25\x63\xf4\xc0\x8a\x2b\xa6\xf8\x40\x76");
   return 29;
 }
