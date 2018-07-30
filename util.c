@@ -52,3 +52,38 @@ void print_hex(char *data, uint8_t length, char *tmp) // prints 8-bit data in he
  tmp[length*2+1] = 0;
  // Serial.println(tmp);
 }
+
+
+// divide by 10^7 and convert to float
+int32_t ublox2float(int32_t x){
+	uint32_t s, e, m, y, z;
+	uint64_t mm;
+	s = x & (1 << 31); // sign bit is same.
+	if (x < 0)
+		y = -x;
+	else
+		y = x;
+
+	// compiler funkyness: we want 32bit multiply to 64bit result
+	mm = (uint64_t)((1LL<<54)/10000000) * y;
+	y = (uint32_t)(mm >> 32);
+	if (y == 0)
+		return 0;
+	z = __builtin_clz(y);
+	y <<= z;
+	m = (y >> 8) & ((1 << 23) - 1);
+	e = (128 + 8 - z) << 23;
+	return s|e|m;
+}
+
+#if 0
+#include "stdio.h"
+int main() {
+	for (int x=0; x<32; x++) {
+		int32_t y = 101 << x;
+		int32_t z = ublox2float(y);
+		printf("%f,%f\n", (float)(y * 1.0e-7), *(float *)&z);
+	}
+	return 0;
+}
+#endif

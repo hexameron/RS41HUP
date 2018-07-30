@@ -9,7 +9,7 @@ void RCC_Conf();
 
 void init_port();
 
-void init_timer(const int rtty_speed);
+void init_timer();
 
 void init_usart_gps(const uint32_t speed, const uint8_t enable_irq);
 
