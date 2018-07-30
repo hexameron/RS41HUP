@@ -13,7 +13,12 @@
 static const uint16_t radioNSELpin = GPIO_Pin_13; // @ GPIOC
 static const uint16_t radioSDIpin = GPIO_Pin_15; // @ GPIOB!
 static const uint8_t WR = 0x80;
-static const float SI4032_CLOCK = 26.0;
+
+#define GENDIV 3
+#define SI4032_KHZ 26000
+#define SI4032_CLOCK (SI4032_KHZ * 1000)
+// SI4032 manual gives minimum deviation of 625 Hz from 10 Mhz
+//  but RS41 manages 270 shift for rtty.
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +28,7 @@ uint8_t _spi_sendrecv(const uint16_t data_word);
 
 uint8_t radio_rw_register(const uint8_t register_addr, uint8_t value, uint8_t write);
 
-void radio_set_tx_frequency(const float radio_set_tx_frequency);
+void radio_set_tx_frequency(uint32_t centre_freq);
 
 void radio_disable_tx();
 

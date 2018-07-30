@@ -2,102 +2,8 @@
 // released under GPL v.2 by anonymous developer
 // enjoy and have a nice day
 // ver 1.5a
-#include <stm32f10x_gpio.h>
-#include <stm32f10x_tim.h>
-#include <stm32f10x_spi.h>
-#include <stm32f10x_tim.h>
-#include <stm32f10x_usart.h>
-#include <stm32f10x_adc.h>
-#include <stm32f10x_rcc.h>
-#include "stdlib.h"
-#include <stdio.h>
-#include <string.h>
-#include <misc.h>
-#include "f_rtty.h"
-#include "init.h"
-#include "config.h"
-#include "radio.h"
-#include "ublox.h"
-#include "delay.h"
-#include "aprs.h"
-#include "util.h"
-#include "mfsk.h"
-#include "horus_l2.h"
 
-// If enabled, print out binary packets as hex before and after coding.
-//#define MFSKDEBUG 1
-
-// IO Pins Definitions. The state of these pins are initilised in init.c
-#define GREEN  GPIO_Pin_7 // Inverted
-#define RED  GPIO_Pin_8 // Non-Inverted (?)
-
-
-// Transmit Modulation Switching
-#define STARTUP 0
-#define RTTY 1
-#define FSK_4 2
-#define FSK_2 3
-volatile int current_mode = STARTUP;
-
-// Telemetry Data to Transmit - used in RTTY & MFSK packet generation functions.
-unsigned int send_count;        //frame counter
-int voltage;
-int8_t si4032_temperature;
-GPSEntry gpsData;
-
-char callsign[15] = {CALLSIGN};
-char status[2] = {'N'};
-uint16_t CRC_rtty = 0x12ab;  //checksum (dummy initial value)
-char buf_rtty[200];
-char buf_mfsk[200];
-
-// Volatile Variables, used within interrupts.
-volatile int adc_bottom = 2000;
-volatile char flaga = 0; // GPS Status Flags
-volatile int led_enabled = 1; // Flag to disable LEDs at altitude.
-
-volatile unsigned char pun = 0;
-volatile unsigned int cun = 10;
-volatile unsigned char tx_on = 0;
-volatile unsigned int tx_on_delay;
-volatile unsigned char tx_enable = 0;
-rttyStates send_rtty_status = rttyZero;
-volatile char *tx_buffer;
-volatile uint16_t current_mfsk_byte = 0;
-volatile uint16_t packet_length = 0;
-volatile uint16_t button_pressed = 0;
-volatile uint8_t disable_armed = 0;
-
-
-// Binary Packet Format
-// Note that we need to pack this to 1-byte alignment, hence the #pragma flags below
-// Refer: https://gcc.gnu.org/onlinedocs/gcc-4.4.4/gcc/Structure_002dPacking-Pragmas.html
-#pragma pack(push,1) 
-struct TBinaryPacket
-{
-uint8_t   PayloadID;
-uint16_t  Counter;
-uint8_t   Hours;
-uint8_t   Minutes;
-uint8_t   Seconds;
-float   Latitude;
-float   Longitude;
-uint16_t    Altitude;
-uint8_t   Speed; // Speed in Knots (1-255 knots)
-uint8_t   Sats;
-int8_t   Temp; // Twos Complement Temp value.
-uint8_t   BattVoltage; // 0 = 0v, 255 = 5.0V, linear steps in-between.
-uint16_t Checksum; // CRC16-CCITT Checksum.
-};  //  __attribute__ ((packed)); // Doesn't work?
-#pragma pack(pop)
-
-
-// Function Definitions
-void collect_telemetry_data();
-void send_rtty_packet();
-void send_mfsk_packet();
-uint16_t gps_CRC16_checksum (char *string);
-
+#include "main.h"
 
 /**
  * GPS data processing
@@ -378,16 +284,16 @@ void send_rtty_packet() {
   uint8_t lon_d = (uint8_t) abs(gpsData.lon_raw / 10000000);
   uint32_t lon_fl = (uint32_t) abs(abs(gpsData.lon_raw) - lon_d * 10000000) / 1000;
 
-  uint8_t speed_kph = (uint8_t)((float)gpsData.speed_raw*0.0036);
+  uint8_t speed_kph = (uint8_t)(9 * gpsData.speed_raw / 2500);
  
   // Produce a RTTY Sentence (Compatible with the existing HORUS RTTY payloads)
   
-  sprintf(buf_rtty, "\n\n\n\n$$$$$%s,%d,%02u:%02u:%02u,%s%d.%04ld,%s%d.%04ld,%ld,%d,%d,%d,%d",
+  sprintf(buf_rtty, "%s,%d,%02u:%02u:%02u,%s%d.%04ld,%s%d.%04ld,%ld,%d,%d,%d,%d",
         callsign,
         send_count,
         gpsData.hours, gpsData.minutes, gpsData.seconds,
-        gpsData.lat_raw < 0 ? "S" : "N", lat_d, lat_fl,
-        gpsData.lon_raw < 0 ? "W" : "E", lon_d, lon_fl,
+        gpsData.lat_raw < 0 ? "-" : "", lat_d, lat_fl,
+        gpsData.lon_raw < 0 ? "-" : "", lon_d, lon_fl,
         (gpsData.alt_raw / 1000),
         speed_kph,
         gpsData.sats_raw,
@@ -396,8 +302,8 @@ void send_rtty_packet() {
         );
   
   // Calculate and append CRC16 checksum to end of sentence.
-  CRC_rtty = string_CRC16_checksum(buf_rtty + 9);
-  sprintf(buf_rtty, "%s*%04X\n", buf_rtty, CRC_rtty & 0xffff);
+  CRC_rtty = string_CRC16_checksum(buf_rtty);
+  sprintf(buf_rtty, "~~~\n%s*%04X\n", buf_rtty, CRC_rtty & 0xffff);
 
   // Point the TX buffer at the temporary RTTY packet buffer.
   tx_buffer = buf_rtty;
@@ -418,10 +324,7 @@ void send_mfsk_packet(){
   if(gpsData.alt_raw < 0){
     gpsData.alt_raw = 0;
   }
-  float float_lat = (float)gpsData.lat_raw / 10000000.0;
-  float float_lon = (float)gpsData.lon_raw / 10000000.0;
-
-  uint8_t volts_scaled = (uint8_t)(255*(float)voltage/500.0);
+  uint8_t volts_scaled = (uint8_t)(51*voltage/100);
 
   // Assemble a binary packet
   struct TBinaryPacket BinaryPacket;
@@ -430,10 +333,10 @@ void send_mfsk_packet(){
   BinaryPacket.Hours = gpsData.hours;
   BinaryPacket.Minutes = gpsData.minutes;
   BinaryPacket.Seconds = gpsData.seconds;
-  BinaryPacket.Latitude = float_lat;
-  BinaryPacket.Longitude = float_lon;
-  BinaryPacket.Altitude = (uint16_t)(gpsData.alt_raw/1000);
-  BinaryPacket.Speed = (uint8_t)((float)gpsData.speed_raw*0.0036);
+  BinaryPacket.Latitude = gpsData.lat_raw;
+  BinaryPacket.Longitude = gpsData.lat_raw;
+  BinaryPacket.Altitude = (uint16_t)(gpsData.alt_raw / 1000);
+  BinaryPacket.Speed = (uint8_t)(9 * gpsData.speed_raw / 2500);
   BinaryPacket.BattVoltage = volts_scaled;
   BinaryPacket.Sats = gpsData.sats_raw;
   BinaryPacket.Temp = si4032_temperature;
