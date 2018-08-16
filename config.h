@@ -15,6 +15,7 @@
 	// Centre frequency
 #define BAUD_RATE  100
 	// RTTY & MFSK Baud rate
+	// DO NOT CHANGE
 
 // Modulation Settings - Comment out a line below to enable/disable a modulation.
 #define RTTY_ENABLED 1
@@ -55,7 +56,6 @@
 
 
 // If enabled, transmit incrementing tones in the 'idle' period between packets.
-// This will only function if ONLY MFSK is enabled.
 #define MFSK_CONTINUOUS 1
 
 

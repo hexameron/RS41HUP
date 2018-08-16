@@ -20,7 +20,7 @@ void USART1_IRQHandler(void) {
 
 void stop_sending() {
 	tx_on = 0;
-	tx_on_delay = TX_DELAY / (1000 / BAUD_RATE);
+	tx_on_delay = 500; // one second idle
 	tx_enable = 0;
 }
 
@@ -31,6 +31,7 @@ void stop_sending() {
 
 void TIM2_IRQHandler(void) {
 	static int mfsk_symbol = 0;
+	static int clockcount = 0;
 
 	if ( TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET ) {
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
@@ -55,9 +56,15 @@ void TIM2_IRQHandler(void) {
 			}
 		}
 
+		int hz100, hz250;
+		if (clockcount++ > 9)
+			clockcount = 0;
+		hz250 = clockcount & 1;
+		hz100 = ((clockcount == 5) || !clockcount) ? 1 : 0;
+
 		if ( tx_on ) {
 			// RTTY Symbol selection logic.
-			if ( current_mode == RTTY ) {
+			if (( current_mode == RTTY ) && hz100) {
 				send_rtty_status = send_rtty( (char *) tx_buffer);
 
 				if ( !disable_armed ) {
@@ -76,17 +83,13 @@ void TIM2_IRQHandler(void) {
 							GPIO_ResetBits(GPIOB, RED);
 					}
 				}
-			} else if ( current_mode == FSK_4 ) {
+			} else if (( current_mode == FSK_4 ) && hz100) {
 				// 4FSK Symbol Selection Logic
-				// Get Symbol to transmit.
 				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
 
 				if ( mfsk_symbol == -1 ) {
 					// Reached the end of the current character, increment the current-byte pointer.
 					if ( current_mfsk_byte++ == packet_length ) {
-						// End of the packet. Reset Counters and stop modulation.
-						radio_rw_register(0x73, 0x03, 1); // Idle at Symbol 3
-						current_mfsk_byte = 0;
 						stop_sending();
 					} else {
 						// We've now advanced to the next byte, grab the first symbol from it.
@@ -97,21 +100,17 @@ void TIM2_IRQHandler(void) {
 				if ( mfsk_symbol != -1 ) {
 					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
 				}
-			} else if ( current_mode == FSK_2 ) {
-				// 2FSK Symbol Selection Logic
-				// Get Symbol to transmit.
-				mfsk_symbol = send_2fsk(tx_buffer[current_mfsk_byte]);
+			} else if (( current_mode == CONTEST ) && hz250 ) {
+				// Symbol Selection Logic EXACTLY the same as 4fsk
+				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
 
 				if ( mfsk_symbol == -1 ) {
 					// Reached the end of the current character, increment the current-byte pointer.
 					if ( current_mfsk_byte++ == packet_length ) {
-						// End of the packet. Reset Counters and stop modulation.
-						radio_rw_register(0x73, 0x00, 1); // Idle at Symbol 0.
-						current_mfsk_byte = 0;
 						stop_sending();
 					} else {
 						// We've now advanced to the next byte, grab the first symbol from it.
-						mfsk_symbol = send_2fsk(tx_buffer[current_mfsk_byte]);
+						mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
 					}
 				}
 				// Set the symbol!
@@ -123,20 +122,17 @@ void TIM2_IRQHandler(void) {
 			}
 		} else {
 			// TX is off
-		#ifdef MFSK_CONTINUOUS
 			// transmit continuous MFSK symbols.
-			mfsk_symbol = (mfsk_symbol + 1) % 4;
-			radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
-		#endif
-		}
+			if (!clockcount) {
+				mfsk_symbol = (mfsk_symbol + 1) & 0x03;
+				radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
+			}
 
-		// Delay between Transmissions Logic.
-		// tx_on_delay is set at the end of a RTTY transmission above, and counts down
-		// at the interrupt rate. When it hits zero, we set tx_enable to 1, which allows
-		// the main loop to continue.
-		if ( !tx_on && --tx_on_delay == 0 ) {
-			tx_enable = 1;
-			tx_on_delay--;
+			// tx_on_delay is set at the end of a RTTY transmission above, and counts down
+			// at the interrupt rate. When it hits zero, we set tx_enable to 1, which allows
+			// the main loop to continue.
+			if ( !tx_on_delay-- )
+				tx_enable = 1;
 		}
 
 		// Green LED Blinking Logic
@@ -164,9 +160,7 @@ int main(void) {
 	RCC_Conf();
 	NVIC_Conf();
 	init_port();
-
-	init_timer(BAUD_RATE);
-
+	init_timer();
 	delay_init();
 	ublox_init();
 
@@ -201,7 +195,7 @@ int main(void) {
 	spi_init();
 	radio_set_tx_frequency(TRANSMIT_FREQUENCY);
 	radio_rw_register(0x71, 0x00, 1);
-	init_timer(BAUD_RATE);
+	init_timer();
 	radio_enable_tx();
 
 	while ( 1 ) {
@@ -210,21 +204,19 @@ int main(void) {
 			if ( current_mode == STARTUP ) {
 				// Grab telemetry information.
 				collect_telemetry_data();
-
-				// Now Startup a RTTY Transmission
 				current_mode = RTTY;
-				// If enabled, transmit a RTTY packet.
 		  #ifdef RTTY_ENABLED
 				send_rtty_packet();
 		  #endif
 			} else if ( current_mode == RTTY ) {
-				// We've just transmitted a RTTY packet, now configure for 4FSK.
 				current_mode = FSK_4;
 		  #ifdef MFSK_ENABLED
 				send_mfsk_packet();
 		  #endif
+			} else if ( current_mode == FSK_4 ) {
+				current_mode = CONTEST;
+				send_contest_packet();
 			} else {
-				// We've finished the 4FSK transmission, grab new data.
 				current_mode = STARTUP;
 			}
 		} else {
@@ -274,8 +266,7 @@ void send_rtty_packet() {
 	uint8_t speed_kph = (uint8_t)(9 * gpsData.speed_raw / 2500);
 
 	// Produce a RTTY Sentence (Compatible with the existing HORUS RTTY payloads)
-
-	sprintf(buf_rtty, "%s,%d,%02u:%02u:%02u,%s%d.%04ld,%s%d.%04ld,%ld,%d,%d,%d,%d",
+	sprintf(buf_mfsk, "%s,%d,%02u:%02u:%02u,%s%d.%04ld,%s%d.%04ld,%ld,%d,%d,%d,%d",
 			callsign,
 			send_count,
 			gpsData.hours, gpsData.minutes, gpsData.seconds,
@@ -290,12 +281,10 @@ void send_rtty_packet() {
 
 	// Calculate and append CRC16 checksum to end of sentence.
 	CRC_rtty = string_CRC16_checksum(buf_rtty);
-	sprintf(buf_rtty, "~~~\n%s*%04X\n", buf_rtty, CRC_rtty & 0xffff);
+	sprintf(buf_rtty, "~~~\n%s*%04X\n", buf_mfsk, CRC_rtty & 0xffff);
 
 	// Point the TX buffer at the temporary RTTY packet buffer.
 	tx_buffer = buf_rtty;
-
-	// Enable the radio, and set the tx_on flag to 1.
 	start_bits = RTTY_PRE_START_BITS;
 	radio_enable_tx();
 	tx_on = 1;
@@ -305,7 +294,6 @@ void send_rtty_packet() {
 
 void send_mfsk_packet(){
 	// Generate a MFSK Binary Packet
-	//packet_length = mfsk_test_bits(buf_mfsk);
 
 	// Sanitise and convert some of the data.
 	if ( gpsData.alt_raw < 0 ) {
@@ -330,23 +318,26 @@ void send_mfsk_packet(){
 
 	BinaryPacket.Checksum = (uint16_t)array_CRC16_checksum( (char*)&BinaryPacket,sizeof(BinaryPacket) - 2);
 
-
 	// Write Preamble characters into mfsk buffer.
 	sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b");
 	// Encode the packet, and write into the mfsk buffer.
 	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4,(unsigned char*)&BinaryPacket,sizeof(BinaryPacket) );
 
-
 	// Data to transmit is the coded packet length, plus the 4-byte preamble.
 	packet_length = coded_len + 4;
 	tx_buffer = buf_mfsk;
-
-	// Enable the radio, and set the tx_on flag to 1.
 	radio_enable_tx();
 	tx_on = 1;
 }
 
 
+void send_contest_packet(){
+	//TODO convert rtty buffer into mfsk symbols
+	packet_length = sizeof(buf_mfsk);
+	tx_buffer = buf_mfsk;
+	radio_enable_tx();
+	tx_on = 1;
+}
 
 
 #ifdef  DEBUG

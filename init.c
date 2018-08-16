@@ -222,14 +222,14 @@ void spi_deinit() {
 
 }
 
-void init_timer(const int rtty_speed) {
+void init_timer() {
   TIM_TimeBaseInitTypeDef TIM2_TimeBaseInitStruct;
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
   RCC_APB1PeriphResetCmd(RCC_APB1Periph_TIM2, DISABLE);
 
   TIM2_TimeBaseInitStruct.TIM_Prescaler = 6 - 1;				// tick every 1/1000000 s
   TIM2_TimeBaseInitStruct.TIM_CounterMode = TIM_CounterMode_Up;
-  TIM2_TimeBaseInitStruct.TIM_Period = (uint16_t) ((1000000 / rtty_speed) - 1);
+  TIM2_TimeBaseInitStruct.TIM_Period = (uint16_t) ((1000000 / 500) - 1);	// fixed at 500 Hz: 2ms
   TIM2_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
   TIM2_TimeBaseInitStruct.TIM_RepetitionCounter = 0;
 

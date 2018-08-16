@@ -19,13 +19,9 @@
 #include "radio.h"
 #include "ublox.h"
 #include "delay.h"
-#include "aprs.h"
 #include "util.h"
 #include "mfsk.h"
 #include "horus_l2.h"
-
-// If enabled, print out binary packets as hex before and after coding.
-//#define MFSKDEBUG 1
 
 // IO Pins Definitions. The state of these pins are initilised in init.c
 #define GREEN  GPIO_Pin_7
@@ -33,12 +29,11 @@
 #define RED  GPIO_Pin_8
 	// Non-Inverted (?)
 
-
 // Transmit Modulation Switching
 #define STARTUP 0
 #define RTTY 1
 #define FSK_4 2
-#define FSK_2 3
+#define CONTEST 3
 volatile int current_mode = STARTUP;
 
 // Telemetry Data to Transmit - used in RTTY & MFSK packet generation functions.
@@ -50,8 +45,8 @@ GPSEntry gpsData;
 char callsign[15] = {CALLSIGN};
 char status[2] = {'N'};
 uint16_t CRC_rtty = 0x12ab;  //checksum (dummy initial value)
-char buf_rtty[200];
-char buf_mfsk[200];
+char buf_rtty[100]; // Usually less than 80 chars
+char buf_mfsk[400]; // contestia buffer needs to be 4x longer than rtty string
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;
@@ -98,5 +93,6 @@ uint16_t  Checksum; // CRC16-CCITT Checksum.
 void collect_telemetry_data();
 void send_rtty_packet();
 void send_mfsk_packet();
+void send_contest_packet();
 uint16_t gps_CRC16_checksum (char *string);
 
