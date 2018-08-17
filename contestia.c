@@ -99,6 +99,23 @@ uint8_t contestia_tick(void) {
   return 0;
 }
 
+uint8_t contestia_convert(char* returnstring) {
+	uint8_t index, outdex, shift, binarycode, greycode;
+
+	// 32 tones of 2 bits each => 8 bytes per two chars input
+	for (index = 0; index < CONTESTIA_NUMBER_OF_TONES; index++) {
+		binarycode = contestia_tones[index];
+		greycode = (binarycode >> 1) ^ binarycode;
+
+		// pack two bits into 8bit output string
+		// TODO: check output is little endian
+		outdex = index >> 2;
+		shift = (index & 0x03) << 1;
+		returnstring[outdex] |= (greycode & 0x03) << shift;
+	}
+
+	return (CONTESTIA_NUMBER_OF_TONES + 3) >> 2;
+}
 
 
 /**

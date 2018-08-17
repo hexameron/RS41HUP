@@ -22,6 +22,7 @@
 #include "util.h"
 #include "mfsk.h"
 #include "horus_l2.h"
+#include "contestia.h"
 
 // IO Pins Definitions. The state of these pins are initilised in init.c
 #define GREEN  GPIO_Pin_7
@@ -45,8 +46,10 @@ GPSEntry gpsData;
 char callsign[15] = {CALLSIGN};
 char status[2] = {'N'};
 uint16_t CRC_rtty = 0x12ab;  //checksum (dummy initial value)
-char buf_rtty[100]; // Usually less than 80 chars
-char buf_mfsk[400]; // contestia buffer needs to be 4x longer than rtty string
+
+#define MAX_RTTY 90
+char buf_rtty[MAX_RTTY]; // Usually less than 80 chars
+char buf_mfsk[MAX_RTTY * 4]; // contestia buffer needs to be 4x longer than rtty string
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;

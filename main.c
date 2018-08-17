@@ -280,8 +280,11 @@ void send_rtty_packet() {
 			);
 
 	// Calculate and append CRC16 checksum to end of sentence.
-	CRC_rtty = string_CRC16_checksum(buf_rtty);
-	sprintf(buf_rtty, "~~~\n%s*%04X\n", buf_mfsk, CRC_rtty & 0xffff);
+	// TODO: contestiaize(buf_mfsk);
+	CRC_rtty = string_CRC16_checksum(buf_mfsk);
+	// snprintf(buf_rtty, MAX_RTTY, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
+	sprintf(buf_rtty, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
+
 
 	// Point the TX buffer at the temporary RTTY packet buffer.
 	tx_buffer = buf_rtty;
@@ -332,8 +335,13 @@ void send_mfsk_packet(){
 
 
 void send_contest_packet(){
-	//TODO convert rtty buffer into mfsk symbols
-	packet_length = sizeof(buf_mfsk);
+	// Convert rtty string into 4fsk symbols
+	packet_length = 0;
+	for (int index = 0; index < MAX_RTTY - 1; index +=2) {
+		contestia_start( &buf_rtty[index] );
+		packet_length += contestia_convert( &buf_mfsk[packet_length] );
+	}
+
 	tx_buffer = buf_mfsk;
 	radio_enable_tx();
 	tx_on = 1;
