@@ -37,8 +37,6 @@
 
 
 void contestia_start(char* data);
-void contestia_preamble(void);
-uint8_t contestia_tick(void);
 void contestia_mfsk_encode_block(char* block, int8_t* tones);
 void contestiaize(char* string);
 uint8_t contestia_convert(char* string);

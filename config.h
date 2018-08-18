@@ -15,7 +15,7 @@
 	// Centre frequency
 #define BAUD_RATE  100
 	// RTTY & MFSK Baud rate
-	// DO NOT CHANGE
+	// DOES NOT CHANGE
 
 // Modulation Settings - Comment out a line below to enable/disable a modulation.
 #define RTTY_ENABLED 1
@@ -45,6 +45,8 @@
 	// RTTY shift = RTTY_DEVIATION x 270Hz
 #define RTTY_7BIT 1
 #define RTTY_USE_2_STOP_BITS   1
+#define RTTY_PRE_START_BITS  1
+	// No pre-start bits, as it throws off timing estimation in FSK demods.
 
 
 //************MFSK Binary Settings************

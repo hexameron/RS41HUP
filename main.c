@@ -19,9 +19,9 @@ void USART1_IRQHandler(void) {
 }
 
 void stop_sending() {
-	tx_on = 0;
-	tx_on_delay = 500; // one second idle
-	tx_enable = 0;
+	tx_on = 0;		// tx_on while sending data
+	tx_on_delay = 500;	// one second idle
+	tx_enable = 0;		// enable main loop after idle period
 }
 
 //
@@ -36,6 +36,8 @@ void TIM2_IRQHandler(void) {
 	if ( TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET ) {
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
 
+		// Button does not disable anything because BAD IDEA unless testing
+		// Code will be removed by compiler if flag is unset
 		if ( ALLOW_DISABLE_BY_BUTTON ) {
 			if ( ADCVal[1] > adc_bottom ) {
 				button_pressed++;
@@ -67,21 +69,19 @@ void TIM2_IRQHandler(void) {
 			if (( current_mode == RTTY ) && hz100) {
 				send_rtty_status = send_rtty( (char *) tx_buffer);
 
-				if ( !disable_armed ) {
-					if ( send_rtty_status == rttyEnd ) {
-						if ( led_enabled )
-							GPIO_SetBits(GPIOB, RED);
-						if ( *(++tx_buffer) == 0 )
-							stop_sending();
-					} else if ( send_rtty_status == rttyOne ) {
-						radio_rw_register(0x73, RTTY_DEVIATION, 1);
-						if ( led_enabled )
-							GPIO_SetBits(GPIOB, RED);
-					} else if ( send_rtty_status == rttyZero ) {
-						radio_rw_register(0x73, 0x00, 1);
-						if ( led_enabled )
-							GPIO_ResetBits(GPIOB, RED);
-					}
+				if ( send_rtty_status == rttyEnd ) {
+					if ( led_enabled )
+						GPIO_SetBits(GPIOB, RED);
+					if ( *(++tx_buffer) == 0 )
+						stop_sending();
+				} else if ( send_rtty_status == rttyOne ) {
+					radio_rw_register(0x73, RTTY_DEVIATION, 1);
+					if ( led_enabled )
+						GPIO_SetBits(GPIOB, RED);
+				} else if ( send_rtty_status == rttyZero ) {
+					radio_rw_register(0x73, 0x00, 1);
+					if ( led_enabled )
+						GPIO_ResetBits(GPIOB, RED);
 				}
 			} else if (( current_mode == FSK_4 ) && hz100) {
 				// 4FSK Symbol Selection Logic
@@ -280,13 +280,10 @@ void send_rtty_packet() {
 			);
 
 	// Calculate and append CRC16 checksum to end of sentence.
-	// TODO: contestiaize(buf_mfsk);
+	contestiaize(buf_mfsk); // replace lower case chars etc.
 	CRC_rtty = string_CRC16_checksum(buf_mfsk);
-	// snprintf(buf_rtty, MAX_RTTY, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
-	sprintf(buf_rtty, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
+	snprintf(buf_rtty, MAX_RTTY, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
 
-
-	// Point the TX buffer at the temporary RTTY packet buffer.
 	tx_buffer = buf_rtty;
 	start_bits = RTTY_PRE_START_BITS;
 	radio_enable_tx();

@@ -24,7 +24,6 @@
 
 #include <string.h>
 
-#include "mfsk.h"
 #include "fwht.h"
 #include "contestia.h"
 
