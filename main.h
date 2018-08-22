@@ -48,8 +48,9 @@ char status[2] = {'N'};
 uint16_t CRC_rtty = 0x12ab;  //checksum (dummy initial value)
 
 #define MAX_RTTY 90
+#define MAX_MFSK (4 * MAX_RTTY)
 char buf_rtty[MAX_RTTY]; // Usually less than 80 chars
-char buf_mfsk[MAX_RTTY * 4]; // contestia buffer needs to be 4x longer than rtty string
+char buf_mfsk[MAX_MFSK]; // contestia buffer needs to be 4x longer than rtty string
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;

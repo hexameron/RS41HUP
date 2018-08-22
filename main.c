@@ -334,9 +334,10 @@ void send_mfsk_packet(){
 void send_contest_packet(){
 	// Convert rtty string into 4fsk symbols
 	packet_length = 0;
+	memset(buf_mfsk, 0, MAX_MFSK);
 	for (int index = 0; index < MAX_RTTY - 1; index +=2) {
-		contestia_start( &buf_rtty[index] );
-		packet_length += contestia_convert( &buf_mfsk[packet_length] );
+		contestia_start( &buf_rtty[index] ); // convert two chars into a temporary buffer ...
+		packet_length += contestia_convert( &buf_mfsk[packet_length] ); // and  read back out
 	}
 
 	tx_buffer = buf_mfsk;
