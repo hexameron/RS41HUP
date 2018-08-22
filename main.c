@@ -308,8 +308,8 @@ void send_mfsk_packet(){
 	BinaryPacket.Hours = gpsData.hours;
 	BinaryPacket.Minutes = gpsData.minutes;
 	BinaryPacket.Seconds = gpsData.seconds;
-	BinaryPacket.Latitude = gpsData.lat_raw;
-	BinaryPacket.Longitude = gpsData.lat_raw;
+	BinaryPacket.Latitude = ublox2float(gpsData.lat_raw);
+	BinaryPacket.Longitude = ublox2float(gpsData.lon_raw);
 	BinaryPacket.Altitude = (uint16_t)(gpsData.alt_raw / 1000);
 	BinaryPacket.Speed = (uint8_t)(9 * gpsData.speed_raw / 2500);
 	BinaryPacket.BattVoltage = volts_scaled;
