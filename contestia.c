@@ -137,7 +137,7 @@ void contestia_mfsk_encode_block(char* block, int8_t* tones)
     } else if (character == '\r') {		/* Carriage Return */
       character = 60;
     } else if (character == '\n') {		/* Line Feed       */
-      character = 0;
+      character = 60;				/*   no \n, use \r */
     } else if (character == 8) {		/* Backspace       */
       character = 61;
     } else if (character == 0) {		/* Null            */
@@ -186,8 +186,8 @@ uint8_t contestia_convert(char* returnstring) {
 
 
 /* This function parses a string and converts to contestia characters */
-void contestiaize(char* string) {
-  for (size_t i = 0; i < strlen(string); i++) {
+void contestiaize(char* string, uint16_t length) {
+  for (size_t i = 0; i < length; i++) {
 
     /* lowercase => UPPERCASE */
     if (string[i] >= 'a' && string[i] <= 'z') {

@@ -18,11 +18,22 @@ void USART1_IRQHandler(void) {
 	}
 }
 
+void start_sending() {
+	if ( 1 ) // Red Led off when sending data
+		GPIO_SetBits(GPIOB, RED);
+	radio_enable_tx();
+	tx_on = 1; // From here the timer interrupt handles things.
+}
+
+
 void stop_sending() {
 	current_mfsk_byte = 0;  // reset next sentence to start
-	tx_on = 0;		// tx_on while sending data
-	tx_on_delay = 500;	// one second idle
-	tx_enable = 0;		// enable main loop after idle period
+	tx_on = 0;		// sending data(1) or idle tones(0)
+	tx_on_delay = TX_DELAY;
+	tx_enable = 0;		// allow next sentence after idle period
+
+	if ( led_enabled )	// Red LED on during idle periods
+		GPIO_ResetBits(GPIOB, RED);
 }
 
 //
@@ -71,18 +82,12 @@ void TIM2_IRQHandler(void) {
 				send_rtty_status = send_rtty( (char *) tx_buffer);
 
 				if ( send_rtty_status == rttyEnd ) {
-					if ( led_enabled )
-						GPIO_SetBits(GPIOB, RED);
 					if ( *(++tx_buffer) == 0 )
 						stop_sending();
 				} else if ( send_rtty_status == rttyOne ) {
 					radio_rw_register(0x73, RTTY_DEVIATION, 1);
-					if ( led_enabled )
-						GPIO_SetBits(GPIOB, RED);
 				} else if ( send_rtty_status == rttyZero ) {
 					radio_rw_register(0x73, 0x00, 1);
-					if ( led_enabled )
-						GPIO_ResetBits(GPIOB, RED);
 				}
 			} else if (( current_mode == FSK_4 ) && hz100) {
 				// 4FSK Symbol Selection Logic
@@ -217,6 +222,8 @@ int main(void) {
 			} else if ( current_mode == FSK_4 ) {
 				current_mode = CONTEST;
 		#ifdef USE_CONTESTIA
+				// New telemetry.
+				collect_telemetry_data();
 				send_contest_packet();
 		#endif
 			} else {
@@ -229,9 +236,9 @@ int main(void) {
 	}
 }
 
-
+int32_t last_lat = 0, last_lon = 0, last_alt = 0;
 void collect_telemetry_data() {
-	// Assemble and proccess the telemetry data we need to construct our RTTY and MFSK packets.
+	// Assemble and process the telemetry data we need to construct our RTTY and MFSK packets.
 	send_count++;
 	si4032_temperature = radio_read_temperature();
 	voltage = ADCVal[0] * 600 / 4096;
@@ -239,8 +246,13 @@ void collect_telemetry_data() {
 
 	if ( gpsData.fix >= 3 ) {
 		flaga |= 0x80;
-		// Disable LEDs if altitude is > 1000m. (Power saving? Maybe?)
-		if ( (gpsData.alt_raw / 1000) > 1000 ) {
+		last_lat = gpsData.lat_raw;
+		last_lon = gpsData.lon_raw;
+		last_alt = gpsData.alt_raw / 1000;
+		if (last_alt < 0)
+			last_alt = 0;
+		// Disable LEDs if altitude is > 500m. (Power saving? Maybe?)
+		if (last_alt > 500) {
 			led_enabled = 0;
 		} else {
 			led_enabled = 1;
@@ -249,59 +261,50 @@ void collect_telemetry_data() {
 		// No GPS fix.
 		flaga &= ~0x80;
 		led_enabled = 1; // Enable LEDs when there is no GPS fix (i.e. during startup)
-
-		// Null out lat / lon data to avoid spamming invalid positions all over the map.
-		gpsData.lat_raw = 0;
-		gpsData.lon_raw = 0;
 	}
 }
 
 
-void send_rtty_packet() {
-	// Write a RTTY packet into the tx buffer, and start transmission.
+uint8_t fill_string() {
+	// Write a UKHAS format string into the RTTY buffer.
 
 	// Convert raw lat/lon values into degrees and decimal degree values.
-	uint8_t lat_d = (uint8_t) abs(gpsData.lat_raw / 10000000);
-	uint32_t lat_fl = (uint32_t) abs(abs(gpsData.lat_raw) - lat_d * 10000000) / 1000;
-	uint8_t lon_d = (uint8_t) abs(gpsData.lon_raw / 10000000);
-	uint32_t lon_fl = (uint32_t) abs(abs(gpsData.lon_raw) - lon_d * 10000000) / 1000;
+	uint8_t lat_d = (uint8_t) abs(last_lat / 10000000);
+	uint32_t lat_fl = (uint32_t) abs(abs(last_lat / 100) - lat_d * 100000);
+	uint8_t lon_d = (uint8_t) abs(last_lon / 10000000);
+	uint32_t lon_fl = (uint32_t) abs(abs(last_lon / 100) - lon_d * 100000);
 
-	uint8_t speed_kph = (uint8_t)(9 * gpsData.speed_raw / 2500);
-
-	// Produce a RTTY Sentence (Compatible with the existing HORUS RTTY payloads)
-	sprintf(buf_mfsk, "%s,%d,%02u:%02u:%02u,%s%d.%04ld,%s%d.%04ld,%ld,%d,%d,%d,%d",
+	// Produce a RTTY Sentence (search Habitat for payload RS41C)
+	sprintf(buf_mfsk, "%s,%d,%02u%02u%02u,%s%d.%05ld,%s%d.%05ld,%d,%d,%d,%d",
 			callsign,
 			send_count,
 			gpsData.hours, gpsData.minutes, gpsData.seconds,
-			gpsData.lat_raw < 0 ? "-" : "", lat_d, lat_fl,
-			gpsData.lon_raw < 0 ? "-" : "", lon_d, lon_fl,
-			(gpsData.alt_raw / 1000),
-			speed_kph,
+			last_lat < 0 ? "-" : "", lat_d, lat_fl,
+			last_lon < 0 ? "-" : "", lon_d, lon_fl,
+			(uint16_t)last_alt,
 			gpsData.sats_raw,
-			voltage * 10,
+			voltage,
 			si4032_temperature
 			);
 
 	// Calculate and append CRC16 checksum to end of sentence.
-	contestiaize(buf_mfsk); // replace lower case chars etc.
+	contestiaize(buf_mfsk, MAX_RTTY); // replace lower case chars etc.
 	CRC_rtty = string_CRC16_checksum(buf_mfsk);
-	snprintf(buf_rtty, MAX_RTTY, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
+	return snprintf(buf_rtty, MAX_RTTY, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
+}
 
+void send_rtty_packet() {
+	// Write a RTTY packet into the tx buffer, and start transmission.
+	fill_string();
 	tx_buffer = buf_rtty;
 	start_bits = RTTY_PRE_START_BITS;
-	radio_enable_tx();
-	tx_on = 1;
-	// From here the timer interrupt handles things.
+	start_sending();
 }
 
 
 void send_mfsk_packet(){
 	// Generate a MFSK Binary Packet
 
-	// Sanitise and convert some of the data.
-	if ( gpsData.alt_raw < 0 ) {
-		gpsData.alt_raw = 0;
-	}
 	uint8_t volts_scaled = (uint8_t)(51 * voltage / 100);
 
 	// Assemble a binary packet
@@ -311,9 +314,9 @@ void send_mfsk_packet(){
 	BinaryPacket.Hours = gpsData.hours;
 	BinaryPacket.Minutes = gpsData.minutes;
 	BinaryPacket.Seconds = gpsData.seconds;
-	BinaryPacket.Latitude = ublox2float(gpsData.lat_raw);
-	BinaryPacket.Longitude = ublox2float(gpsData.lon_raw);
-	BinaryPacket.Altitude = (uint16_t)(gpsData.alt_raw / 1000);
+	BinaryPacket.Latitude = ublox2float(last_lat);
+	BinaryPacket.Longitude = ublox2float(last_lon);
+	BinaryPacket.Altitude = (uint16_t)(last_alt);
 	BinaryPacket.Speed = (uint8_t)(9 * gpsData.speed_raw / 2500);
 	BinaryPacket.BattVoltage = volts_scaled;
 	BinaryPacket.Sats = gpsData.sats_raw;
@@ -329,23 +332,23 @@ void send_mfsk_packet(){
 	// Data to transmit is the coded packet length, plus the 4-byte preamble.
 	packet_length = coded_len + 4;
 	tx_buffer = buf_mfsk;
-	radio_enable_tx();
-	tx_on = 1;
+	start_sending();
 }
 
 
 void send_contest_packet(){
+	uint8_t rtty_len;
+	rtty_len = fill_string();
+
 	// Convert rtty string into 4fsk symbols
 	packet_length = 0;
 	memset(buf_mfsk, 0, MAX_MFSK);
-	for (int index = 0; index < MAX_RTTY - 1; index +=2) {
+	for (int index = 0; index < rtty_len; index +=2) {
 		contestia_start( &buf_rtty[index] ); // convert two chars into a temporary buffer ...
 		packet_length += contestia_convert( &buf_mfsk[packet_length] ); // and  read back out
 	}
-
 	tx_buffer = buf_mfsk;
-	radio_enable_tx();
-	tx_on = 1;
+	start_sending();
 }
 
 
