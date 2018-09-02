@@ -59,7 +59,7 @@ void TIM2_IRQHandler(void) {
 		}
 
 		int hz100, hz250;
-		if (clockcount++ > 9)
+		if (++clockcount > 9)
 			clockcount = 0;
 		hz250 = clockcount & 1;
 		hz100 = ((clockcount == 5) || !clockcount) ? 1 : 0;
@@ -205,17 +205,19 @@ int main(void) {
 				// Grab telemetry information.
 				collect_telemetry_data();
 				current_mode = RTTY;
-		  #ifdef RTTY_ENABLED
+		#ifdef RTTY_ENABLED
 				send_rtty_packet();
-		  #endif
+		#endif
 			} else if ( current_mode == RTTY ) {
 				current_mode = FSK_4;
-		  #ifdef MFSK_ENABLED
+		#ifdef MFSK_ENABLED
 				send_mfsk_packet();
-		  #endif
+		#endif
 			} else if ( current_mode == FSK_4 ) {
 				current_mode = CONTEST;
+		#ifdef USE_CONTESTIA
 				send_contest_packet();
+		#endif
 			} else {
 				current_mode = STARTUP;
 			}

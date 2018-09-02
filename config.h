@@ -20,6 +20,7 @@
 // Modulation Settings - Comment out a line below to enable/disable a modulation.
 #define RTTY_ENABLED 1
 #define MFSK_ENABLED 1
+//#define USE_CONTESTIA 1
 
 // TX Power
 #define TX_POWER  4
