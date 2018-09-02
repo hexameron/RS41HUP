@@ -19,6 +19,7 @@ void USART1_IRQHandler(void) {
 }
 
 void stop_sending() {
+	current_mfsk_byte = 0;  // reset next sentence to start
 	tx_on = 0;		// tx_on while sending data
 	tx_on_delay = 500;	// one second idle
 	tx_enable = 0;		// enable main loop after idle period
@@ -89,7 +90,7 @@ void TIM2_IRQHandler(void) {
 
 				if ( mfsk_symbol == -1 ) {
 					// Reached the end of the current character, increment the current-byte pointer.
-					if ( current_mfsk_byte++ == packet_length ) {
+					if ( current_mfsk_byte++ >= packet_length ) {
 						stop_sending();
 					} else {
 						// We've now advanced to the next byte, grab the first symbol from it.
@@ -106,7 +107,7 @@ void TIM2_IRQHandler(void) {
 
 				if ( mfsk_symbol == -1 ) {
 					// Reached the end of the current character, increment the current-byte pointer.
-					if ( current_mfsk_byte++ == packet_length ) {
+					if ( current_mfsk_byte++ >= packet_length ) {
 						stop_sending();
 					} else {
 						// We've now advanced to the next byte, grab the first symbol from it.
@@ -141,14 +142,14 @@ void TIM2_IRQHandler(void) {
 				// Clear Green LED.
 				GPIO_SetBits(GPIOB, GREEN);
 				pun = 0;
+				cun = 1000; // 2s off
 			} else {
 				// If we have GPS lock, set LED
 				if ( flaga & 0x80 )
 					GPIO_ResetBits(GPIOB, GREEN);
 				pun = 1;
+				cun = 200; // 0.4s on
 			}
-			// Wait 200 symbols.
-			cun = 200;
 		}
 	}
 }
