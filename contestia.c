@@ -175,9 +175,9 @@ uint8_t contestia_convert(char* returnstring) {
 		greycode = (binarycode >> 1) ^ binarycode;
 
 		// pack two bits into 8bit output string
-		// TODO: check output is little endian
+		// Output is big endian
 		outdex = index >> 2;
-		shift = (index & 0x03) << 1;
+		shift = 6 -((index & 0x03) << 1);
 		returnstring[outdex] |= (greycode & 0x03) << shift;
 	}
 

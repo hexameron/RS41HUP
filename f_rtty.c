@@ -5,12 +5,12 @@ rttyStates send_rtty(char *buffer) {
   // Step through a supplied charater bit by bit (with each function call), and return
   // the current state (one, zero, end)
   static uint8_t nr_bit = 0;
-  nr_bit++;
   // 
   if (start_bits){
     start_bits--;
     return rttyOne;
   }
+  nr_bit++;
   // Start bit.
   if (nr_bit == 1) {
     return rttyZero;

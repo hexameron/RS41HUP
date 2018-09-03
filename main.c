@@ -274,7 +274,7 @@ uint8_t fill_string() {
 	uint8_t lon_d = (uint8_t) abs(last_lon / 10000000);
 	uint32_t lon_fl = (uint32_t) abs(abs(last_lon / 100) - lon_d * 100000);
 
-	// Produce a RTTY Sentence (search Habitat for payload RS41C)
+	// Write RTTY Sentence (search Habitat for payload RS41C)
 	sprintf(buf_mfsk, "%s,%d,%02u%02u%02u,%s%d.%05ld,%s%d.%05ld,%d,%d,%d,%d",
 			callsign,
 			send_count,
@@ -283,7 +283,7 @@ uint8_t fill_string() {
 			last_lon < 0 ? "-" : "", lon_d, lon_fl,
 			(uint16_t)last_alt,
 			gpsData.sats_raw,
-			voltage,
+			voltage / 10, // one decimal place instead of two
 			si4032_temperature
 			);
 
@@ -294,7 +294,7 @@ uint8_t fill_string() {
 }
 
 void send_rtty_packet() {
-	// Write a RTTY packet into the tx buffer, and start transmission.
+	// Write a string into the tx buffer, and start RTTY transmission.
 	fill_string();
 	tx_buffer = buf_rtty;
 	start_bits = RTTY_PRE_START_BITS;
