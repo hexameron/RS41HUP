@@ -35,6 +35,7 @@
 #define RTTY 1
 #define FSK_4 2
 #define CONTEST 3
+#define PREAMBLE 4
 volatile int current_mode = STARTUP;
 
 // Telemetry Data to Transmit - used in RTTY & MFSK packet generation functions.

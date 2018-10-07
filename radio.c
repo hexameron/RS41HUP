@@ -31,7 +31,7 @@ void radio_set_tx_frequency(uint32_t centre_freq) {
 }
 
 void radio_disable_tx() {
-  radio_rw_register(0x07, 0x40, 1);
+  radio_rw_register(0x07, 0x41, 1);
 }
 
 void radio_soft_reset() {

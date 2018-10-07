@@ -70,6 +70,14 @@ void ublox_get_last_data(GPSEntry * gpsEntry){
   __enable_irq();
 }
 
+void ubx_powersave(){
+  uBloxPacket msgcfgrxm = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x11, .payloadSize=sizeof(uBloxCFGRXMPayload)},
+      .data.cfgrxm = {.reserved1=8, .lpMode=1}};
+
+  send_ublox_packet(&msgcfgrxm);
+  ublox_wait_for_ack(); // ok to fail
+}
+
 void ublox_init(){
   uBloxPacket msgcfgrst = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x04, .payloadSize=sizeof(uBloxCFGRSTPayload)},
       .data.cfgrst = { .navBbrMask=0xffff, .resetMode=1, .reserved1 = 0}
@@ -90,13 +98,7 @@ void ublox_init(){
   init_usart_gps(38400, 1);
 
   _delay_ms(10);
-
-  uBloxPacket msgcfgrxm = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x11, .payloadSize=sizeof(uBloxCFGRXMPayload)},
-      .data.cfgrxm = {.reserved1=8, .lpMode=4}};
-
-  do {
-    send_ublox_packet(&msgcfgrxm);
-  } while (!ublox_wait_for_ack());
+  // ubx_powersave();
 
   uBloxPacket msgcfgmsg = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x01, .payloadSize=sizeof(uBloxCFGMSGPayload)},
     .data.cfgmsg = {.msgClass=0x01, .msgID=0x02, .rate=1}};
@@ -115,12 +117,14 @@ void ublox_init(){
     send_ublox_packet(&msgcfgmsg);
   } while (!ublox_wait_for_ack());
 
+  // Flight mode - needed above 18km altitude
   uBloxPacket msgcfgnav5 = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x24, .payloadSize=sizeof(uBloxCFGNAV5Payload)},
     .data.cfgnav5={.mask=0b00000001111111111, .dynModel=7, .fixMode=2, .fixedAlt=0, .fixedAltVar=10000, .minElev=5, .drLimit=0, .pDop=25, .tDop=25,
                    .pAcc=100, .tAcc=300, .staticHoldThresh=0, .dgpsTimeOut=2, .reserved2=0, .reserved3=0, .reserved4=0}};
   do {
     send_ublox_packet(&msgcfgnav5);
   } while (!ublox_wait_for_ack());
+
 }
 
 void ublox_handle_incoming_byte(uint8_t data){

@@ -19,8 +19,8 @@ void USART1_IRQHandler(void) {
 }
 
 void start_sending() {
-	if ( 1 ) // Red Led off when sending data
-		GPIO_SetBits(GPIOB, RED);
+//	if (  led_enabled ) // Red Led on when sending data
+//		GPIO_ResetBits(GPIOB, RED);
 	radio_enable_tx();
 	tx_on = 1; // From here the timer interrupt handles things.
 }
@@ -31,9 +31,10 @@ void stop_sending() {
 	tx_on = 0;		// sending data(1) or idle tones(0)
 	tx_on_delay = TX_DELAY;
 	tx_enable = 0;		// allow next sentence after idle period
+	radio_disable_tx();	// no transmit powersave
 
-	if ( led_enabled )	// Red LED on during idle periods
-		GPIO_ResetBits(GPIOB, RED);
+//	if ( 1 )	// Red LED off during idle periods
+//		GPIO_SetBits(GPIOB, RED);
 }
 
 //
@@ -44,6 +45,7 @@ void stop_sending() {
 void TIM2_IRQHandler(void) {
 	static int mfsk_symbol = 0;
 	static int clockcount = 0;
+	static int preamble_byte = 20;
 
 	if ( TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET ) {
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
@@ -124,34 +126,45 @@ void TIM2_IRQHandler(void) {
 					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
 				}
 			} else {
-				// Ummmm.
+				// Preamble
+				// transmit continuous MFSK symbols.
+				if ( (current_mode == PREAMBLE) && !clockcount) {
+					mfsk_symbol = (mfsk_symbol + 1) & 0x03;
+					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
+					if ( !preamble_byte-- ) {
+						preamble_byte = 20;
+						current_mode = FSK_4;
+					}
+				}
+
+
 			}
 		} else {
 			// TX is off
-			// transmit continuous MFSK symbols.
-			if (!clockcount) {
-				mfsk_symbol = (mfsk_symbol + 1) & 0x03;
-				radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
-			}
 
-			// tx_on_delay is set at the end of a RTTY transmission above, and counts down
+			// tx_on_delay is set at the end of a Transmission above, and counts down
 			// at the interrupt rate. When it hits zero, we set tx_enable to 1, which allows
 			// the main loop to continue.
 			if ( !tx_on_delay-- )
 				tx_enable = 1;
 		}
 
-		// Green LED Blinking Logic
-		if ( led_enabled && (--cun == 0) ) {
+		// LED Blinking Logic
+		if ( --cun == 0 ) {
 			if ( pun ) {
-				// Clear Green LED.
+				// Clear LEDs.
 				GPIO_SetBits(GPIOB, GREEN);
+				GPIO_SetBits(GPIOB, RED);
+				cun = 2000; // 4s off
 				pun = 0;
-				cun = 1000; // 2s off
 			} else {
 				// If we have GPS lock, set LED
-				if ( flaga & 0x80 )
-					GPIO_ResetBits(GPIOB, GREEN);
+				if (led_enabled) {
+					if ( flaga & 0x80 )
+						GPIO_ResetBits(GPIOB, GREEN);
+					else
+						GPIO_ResetBits(GPIOB, RED);
+				}
 				pun = 1;
 				cun = 200; // 0.4s on
 			}
@@ -215,14 +228,14 @@ int main(void) {
 				send_rtty_packet();
 		#endif
 			} else if ( current_mode == RTTY ) {
-				current_mode = FSK_4;
+				current_mode = PREAMBLE;
 		#ifdef MFSK_ENABLED
+				collect_telemetry_data();
 				send_mfsk_packet();
 		#endif
 			} else if ( current_mode == FSK_4 ) {
 				current_mode = CONTEST;
 		#ifdef USE_CONTESTIA
-				// New telemetry.
 				collect_telemetry_data();
 				send_contest_packet();
 		#endif
@@ -245,6 +258,9 @@ void collect_telemetry_data() {
 	ublox_get_last_data(&gpsData);
 
 	if ( gpsData.fix >= 3 ) {
+		if (!(send_count & 31))
+			ubx_powersave();
+
 		flaga |= 0x80;
 		last_lat = gpsData.lat_raw;
 		last_lon = gpsData.lon_raw;
@@ -274,8 +290,8 @@ uint8_t fill_string() {
 	uint8_t lon_d = (uint8_t) abs(last_lon / 10000000);
 	uint32_t lon_fl = (uint32_t) abs(abs(last_lon / 100) - lon_d * 100000);
 
-	// Write RTTY Sentence (search Habitat for payload RS41C)
-	sprintf(buf_mfsk, "%s,%d,%02u%02u%02u,%s%d.%05ld,%s%d.%05ld,%d,%d,%d,%d",
+	// RTTY Sentence uses same format as Horus Binary, so can use same callsign.
+	sprintf(buf_mfsk, "%s,%d,%02u%02u%02u,%s%d.%05ld,%s%d.%05ld,%d,0,%d,%d,%d.%02d",
 			callsign,
 			send_count,
 			gpsData.hours, gpsData.minutes, gpsData.seconds,
@@ -283,8 +299,8 @@ uint8_t fill_string() {
 			last_lon < 0 ? "-" : "", lon_d, lon_fl,
 			(uint16_t)last_alt,
 			gpsData.sats_raw,
-			voltage / 10, // one decimal place instead of two
-			si4032_temperature
+			si4032_temperature,
+			voltage / 100, voltage - 100 * (voltage/ 100)
 			);
 
 	// Calculate and append CRC16 checksum to end of sentence.
@@ -317,7 +333,7 @@ void send_mfsk_packet(){
 	BinaryPacket.Latitude = ublox2float(last_lat);
 	BinaryPacket.Longitude = ublox2float(last_lon);
 	BinaryPacket.Altitude = (uint16_t)(last_alt);
-	BinaryPacket.Speed = (uint8_t)(9 * gpsData.speed_raw / 2500);
+	BinaryPacket.Speed = 0; //(uint8_t)(9 * gpsData.speed_raw / 2500);
 	BinaryPacket.BattVoltage = volts_scaled;
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;
