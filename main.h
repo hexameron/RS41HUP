@@ -87,7 +87,7 @@ int32_t   Longitude;
 uint16_t  Altitude;
 uint8_t   Speed; // Speed in Knots (1-255 knots)
 uint8_t   Sats;
-int8_t    Temp; // Twos Complement Temp value.
+int8_t    Temp; // -64 to +64; SI4032 internal chip temp.
 uint8_t   BattVoltage; // 0 = 0v, 255 = 5.0V, linear steps in-between.
 uint16_t  Checksum; // CRC16-CCITT Checksum.
 };  //  __attribute__ ((packed)); // Doesn't work?

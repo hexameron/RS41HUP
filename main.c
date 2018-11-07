@@ -199,10 +199,10 @@ int main(void) {
 	radio_rw_register(0x71, 0x00, 1);
 
 	// Temperature Value Offset
-	radio_rw_register(0x13, 0xF0, 1);
+	radio_rw_register(0x13, 0x00, 1);
 
 	// Temperature Sensor Calibration
-	radio_rw_register(0x12, 0x00, 1);
+	radio_rw_register(0x12, 0x20, 1);
 
 	// ADC configuration
 	radio_rw_register(0x0f, 0x80, 1);

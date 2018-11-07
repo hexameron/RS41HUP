@@ -36,6 +36,9 @@
 // 6 --> 15.0dBm
 // 7 --> 16.3dBm
 
+// WARNING: RS41s have been observed to lose transmitter PLL lock at low temperature, even with
+// stock insulation. This results in the transmitted signal drifting up the 70cm band with temperature.
+
 // Delay between transmitted packets at 500 Hz
 #define TX_DELAY  (500 * 15)
 

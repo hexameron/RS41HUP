@@ -44,8 +44,16 @@ void radio_enable_tx() {
 
 int8_t radio_read_temperature() {
   uint8_t temp;
-  temp = radio_rw_register(0x11, 0xff, 0); // read ADC
-  int8_t temperatura = (int8_t) (-64 + (temp * 5 / 10) - 16);
+  // Read ADC Value.
+  // Temp (degC) = -64 + ADC Value * 0.5
+  temp = radio_rw_register(0x11, 0xff, 0);
+
+  // Convert ADC value to signed temperature value.
+  int16_t temp_2 = -64 + ((int16_t)temp * 5) / 10;
+
+  // Trigger ADC to capture another measurement.
   radio_rw_register(0x0f, 0x80, 1);
-  return temperatura;
+
+  // Cast temperature value to int8_t and return.
+  return (int8_t)temp_2;
 }
