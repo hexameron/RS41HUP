@@ -55,11 +55,10 @@ char buf_mfsk[MAX_MFSK]; // contestia buffer needs to be 4x longer than rtty str
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;
-volatile char flaga = 0; // GPS Status Flags
-volatile int led_enabled = 1; // Flag to disable LEDs at altitude.
+volatile int led_enabled = 3; // off=0/red=1/green=2/red+green=orange
 
 volatile unsigned char pun = 0;
-volatile unsigned int cun = 10;
+volatile unsigned int cun = 1000; // 2 seconds of orange LED at startup
 volatile unsigned char tx_on = 0;
 volatile unsigned int tx_on_delay;
 volatile unsigned char tx_enable = 0;

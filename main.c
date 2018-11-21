@@ -19,8 +19,6 @@ void USART1_IRQHandler(void) {
 }
 
 void start_sending() {
-//	if (  led_enabled ) // Red Led on when sending data
-//		GPIO_ResetBits(GPIOB, RED);
 	radio_enable_tx();
 	tx_on = 1; // From here the timer interrupt handles things.
 }
@@ -32,9 +30,6 @@ void stop_sending() {
 	tx_on_delay = TX_DELAY;
 	tx_enable = 0;		// allow next sentence after idle period
 	radio_disable_tx();	// no transmit powersave
-
-//	if ( 1 )	// Red LED off during idle periods
-//		GPIO_SetBits(GPIOB, RED);
 }
 
 //
@@ -159,12 +154,10 @@ void TIM2_IRQHandler(void) {
 				pun = 0;
 			} else {
 				// If we have GPS lock, set LED
-				if (led_enabled) {
-					if ( flaga & 0x80 )
-						GPIO_ResetBits(GPIOB, GREEN);
-					else
-						GPIO_ResetBits(GPIOB, RED);
-				}
+				if (led_enabled & 2)
+					GPIO_ResetBits(GPIOB, GREEN);
+				if (led_enabled & 1)
+					GPIO_ResetBits(GPIOB, RED);
 				pun = 1;
 				cun = 200; // 0.4s on
 			}
@@ -183,9 +176,9 @@ int main(void) {
 	delay_init();
 	ublox_init();
 
-	GPIO_SetBits(GPIOB, RED);
-	// NOTE - Green LED is inverted. (Reset to activate, Set to deactivate)
-	GPIO_SetBits(GPIOB, GREEN);
+	GPIO_ResetBits(GPIOB, RED);
+	// NOTE - LEDs are inverted. (Reset to activate, Set to deactivate)
+	GPIO_ResetBits(GPIOB, GREEN);
 	USART_SendData(USART3, 0xc);
 
 	radio_soft_reset();
@@ -221,10 +214,9 @@ int main(void) {
 		// Don't do anything until the previous transmission has finished.
 		if ( tx_on == 0 && tx_enable ) {
 			if ( current_mode == STARTUP ) {
-				// Grab telemetry information.
-				collect_telemetry_data();
 				current_mode = RTTY;
 		#ifdef RTTY_ENABLED
+				collect_telemetry_data();
 				send_rtty_packet();
 		#endif
 			} else if ( current_mode == RTTY ) {
@@ -257,11 +249,10 @@ void collect_telemetry_data() {
 	voltage = ADCVal[0] * 600 / 4096;
 	ublox_get_last_data(&gpsData);
 
-	if ( gpsData.fix >= 3 ) {
+	if ( (gpsData.fix >= 3)&&(gpsData.fix < 5) ) {
 		if (!(send_count & 31))
 			ubx_powersave();
 
-		flaga |= 0x80;
 		last_lat = gpsData.lat_raw;
 		last_lon = gpsData.lon_raw;
 		last_alt = gpsData.alt_raw / 1000;
@@ -271,12 +262,11 @@ void collect_telemetry_data() {
 		if (last_alt > 500) {
 			led_enabled = 0;
 		} else {
-			led_enabled = 1;
+			led_enabled = 2; // flash green when GPS has lock
 		}
 	} else {
 		// No GPS fix.
-		flaga &= ~0x80;
-		led_enabled = 1; // Enable LEDs when there is no GPS fix (i.e. during startup)
+		led_enabled = 1; // flash red for no GPS fix
 	}
 }
 
