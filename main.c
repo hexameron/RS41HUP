@@ -45,15 +45,15 @@ void TIM2_IRQHandler(void) {
 	if ( TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET ) {
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
 
-		// Button does not disable anything because BAD IDEA unless testing
+		// BAD IDEA unless testing
 		// Code will be removed by compiler if flag is unset
 		if ( ALLOW_DISABLE_BY_BUTTON ) {
 			if ( ADCVal[1] > adc_bottom ) {
 				button_pressed++;
-				if ( button_pressed > (BAUD_RATE / 3) ) {
+				if ( button_pressed > (500 / 3) ) {
 					disable_armed = 1;
-					GPIO_SetBits(GPIOB, RED);
-					//GPIO_SetBits(GPIOB, GREEN);
+					GPIO_ResetBits(GPIOB, RED);
+					GPIO_ResetBits(GPIOB, GREEN);
 				}
 			} else {
 				if ( disable_armed ) {
@@ -86,7 +86,9 @@ void TIM2_IRQHandler(void) {
 				} else if ( send_rtty_status == rttyZero ) {
 					radio_rw_register(0x73, 0x00, 1);
 				}
-			} else if (( current_mode == FSK_4 ) && hz100) {
+			} else if ((( current_mode == SEND4FSK ) && hz100 )
+					|| (( current_mode == OLIVIA ) && hz250 )
+					|| (( current_mode == CONTEST ) && hz250 )) {
 				// 4FSK Symbol Selection Logic
 				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
 
@@ -103,32 +105,16 @@ void TIM2_IRQHandler(void) {
 				if ( mfsk_symbol != -1 ) {
 					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
 				}
-			} else if (( current_mode == CONTEST ) && hz250 ) {
-				// Symbol Selection Logic EXACTLY the same as 4fsk
-				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
-
-				if ( mfsk_symbol == -1 ) {
-					// Reached the end of the current character, increment the current-byte pointer.
-					if ( current_mfsk_byte++ >= packet_length ) {
-						stop_sending();
-					} else {
-						// We've now advanced to the next byte, grab the first symbol from it.
-						mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
-					}
-				}
-				// Set the symbol!
-				if ( mfsk_symbol != -1 ) {
-					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
-				}
 			} else {
-				// Preamble
-				// transmit continuous MFSK symbols.
-				if ( (current_mode == PREAMBLE) && !clockcount) {
+				// Preamble for horus_demod to lock on:
+				// Transmit continuous MFSK symbols at 50 baud.
+				if ( (current_mode == HORUS) && !clockcount) {
 					mfsk_symbol = (mfsk_symbol + 1) & 0x03;
 					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
 					if ( !preamble_byte-- ) {
 						preamble_byte = 20;
-						current_mode = FSK_4;
+						// start sending data
+						current_mode = SEND4FSK;
 					}
 				}
 
@@ -176,8 +162,8 @@ int main(void) {
 	delay_init();
 	ublox_init();
 
-	GPIO_ResetBits(GPIOB, RED);
 	// NOTE - LEDs are inverted. (Reset to activate, Set to deactivate)
+	GPIO_SetBits(GPIOB, RED);
 	GPIO_ResetBits(GPIOB, GREEN);
 	USART_SendData(USART3, 0xc);
 
@@ -215,21 +201,27 @@ int main(void) {
 		if ( tx_on == 0 && tx_enable ) {
 			if ( current_mode == STARTUP ) {
 				current_mode = RTTY;
-		#ifdef RTTY_ENABLED
+		#ifdef USE_RTTY
 				collect_telemetry_data();
 				send_rtty_packet();
 		#endif
 			} else if ( current_mode == RTTY ) {
-				current_mode = PREAMBLE;
-		#ifdef MFSK_ENABLED
+				current_mode = OLIVIA;
+		#ifdef USE_OLIVIA
 				collect_telemetry_data();
-				send_mfsk_packet();
+				send_contest_packet();
 		#endif
-			} else if ( current_mode == FSK_4 ) {
+			} else if ( current_mode == OLIVIA ) {
 				current_mode = CONTEST;
 		#ifdef USE_CONTESTIA
 				collect_telemetry_data();
 				send_contest_packet();
+		#endif
+			} else if ( current_mode == CONTEST ) {
+				current_mode = HORUS;
+		#ifdef USE_HORUS
+				collect_telemetry_data();
+				send_mfsk_packet();
 		#endif
 			} else {
 				current_mode = STARTUP;
@@ -350,8 +342,12 @@ void send_contest_packet(){
 	packet_length = 0;
 	memset(buf_mfsk, 0, MAX_MFSK);
 	for (int index = 0; index < rtty_len; index +=2) {
-		contestia_start( &buf_rtty[index] ); // convert two chars into a temporary buffer ...
-		packet_length += contestia_convert( &buf_mfsk[packet_length] ); // and  read back out
+		// convert two chars at a time
+		if ( current_mode == OLIVIA ) {
+			packet_length += olivia_block( &buf_rtty[index],  &buf_mfsk[packet_length] );
+		} else {
+			packet_length += contestia_block( &buf_rtty[index],  &buf_mfsk[packet_length] );
+		}
 	}
 	tx_buffer = buf_mfsk;
 	start_sending();

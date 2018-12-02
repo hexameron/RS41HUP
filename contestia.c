@@ -105,7 +105,7 @@ void mfsk_encode_block(char* block, int8_t* tones,
  * It takes a buffer of ASCII-encoded text and returns an array of
  * tones to transmit.
  */
-void olivia_mfsk_encode_block(char* block, int8_t* tones)
+void olivia_encode_block(char* block, int8_t* tones)
 {
   size_t bits_per_symbol = 2; /* That is, there are 2^2=4 tones */
 
@@ -117,7 +117,7 @@ void olivia_mfsk_encode_block(char* block, int8_t* tones)
  * It takes a buffer of ASCII-encoded text and returns an array of
  * tones to transmit.
  */
-void contestia_mfsk_encode_block(char* block, int8_t* tones)
+void contestia_encode_block(char* block, int8_t* tones)
 {
   size_t bits_per_symbol = 2; /* That is, there are 2^2=4 tones */
 
@@ -158,19 +158,15 @@ void contestia_mfsk_encode_block(char* block, int8_t* tones)
  *  Code to interface with Project Horus 4fsk code in main.c
  */
 
-int8_t contestia_tones[CONTESTIA_NUMBER_OF_TONES];
-
-/* translate a block of 2 chars into 32 tones */
-void contestia_start(char* block) {
-	contestia_mfsk_encode_block(block, contestia_tones);
-}
+/* Olivia is twice as long as Contestia */
+int8_t contestia_tones[OLIVIA_NUMBER_OF_TONES];
 
 /* pack a block of 32 tones into 8 chars for transmission */
-uint8_t contestia_convert(char* returnstring) {
+uint8_t contestia_convert(char* returnstring, uint16_t length) {
 	uint8_t index, outdex, shift;
 	int8_t	binarycode, greycode;
 
-	for (index = 0; index < CONTESTIA_NUMBER_OF_TONES; index++) {
+	for (index = 0; index < length; index++) {
 		binarycode = contestia_tones[index];
 		greycode = (binarycode >> 1) ^ binarycode;
 
@@ -181,9 +177,20 @@ uint8_t contestia_convert(char* returnstring) {
 		returnstring[outdex] |= (greycode & 0x03) << shift;
 	}
 
-	return (CONTESTIA_NUMBER_OF_TONES + 3) >> 2;
+	return (length + 3) >> 2;
 }
 
+/* translate a block of 2 chars into 32 tones */
+uint8_t contestia_block(char* block, char* outstring) {
+	contestia_encode_block(block, contestia_tones);
+	return contestia_convert( outstring, 32);
+}
+
+/* translate a block of 2 chars into 64 tones */
+uint8_t olivia_block(char* block, char* outstring) {
+	olivia_encode_block(block, contestia_tones);
+	return  contestia_convert( outstring, 64);
+}
 
 /* This function parses a string and converts to contestia characters */
 void contestiaize(char* string, uint16_t length) {

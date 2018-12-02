@@ -33,9 +33,10 @@
 // Transmit Modulation Switching
 #define STARTUP 0
 #define RTTY 1
-#define FSK_4 2
-#define CONTEST 3
-#define PREAMBLE 4
+#define HORUS 2
+#define OLIVIA 3
+#define CONTEST 4
+#define SEND4FSK 5
 volatile int current_mode = STARTUP;
 
 // Telemetry Data to Transmit - used in RTTY & MFSK packet generation functions.
@@ -49,7 +50,7 @@ char status[2] = {'N'};
 uint16_t CRC_rtty = 0x12ab;  //checksum (dummy initial value)
 
 #define MAX_RTTY 90
-#define MAX_MFSK (4 * MAX_RTTY)
+#define MAX_MFSK (10 * MAX_RTTY)
 char buf_rtty[MAX_RTTY]; // Usually less than 80 chars
 char buf_mfsk[MAX_MFSK]; // contestia buffer needs to be 4x longer than rtty string
 
@@ -58,7 +59,7 @@ volatile int adc_bottom = 2000;
 volatile int led_enabled = 3; // off=0/red=1/green=2/red+green=orange
 
 volatile unsigned char pun = 0;
-volatile unsigned int cun = 1000; // 2 seconds of orange LED at startup
+volatile unsigned int cun = 1000; // 2 seconds of green LED at startup
 volatile unsigned char tx_on = 0;
 volatile unsigned int tx_on_delay;
 volatile unsigned char tx_enable = 0;

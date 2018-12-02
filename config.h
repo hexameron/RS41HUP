@@ -13,14 +13,12 @@
 //************GLOBAL Settings*****************
 #define TRANSMIT_FREQUENCY  434412000
 	// Centre frequency
-#define BAUD_RATE  100
-	// RTTY & MFSK Baud rate
-	// DOES NOT CHANGE
 
-// Modulation Settings - Comment out a line below to enable/disable a modulation.
-#define RTTY_ENABLED 1
-#define MFSK_ENABLED 1
-#define USE_CONTESTIA 1
+// Modulation Settings - Comment out a line below to disable a modulation.
+#define USE_RTTY
+#define USE_HORUS
+#define USE_OLIVIA
+#define USE_CONTESTIA
 
 // TX Power
 #define TX_POWER  3
@@ -40,13 +38,14 @@
 // stock insulation. This results in the transmitted signal drifting up the 70cm band with temperature.
 
 // Delay between transmitted packets at 500 Hz
-#define TX_DELAY  (500 * 15)
+#define OFF_TIME 5
+#define TX_DELAY  (500 * OFF_TIME)
 
 //*************RTTY SETTINGS******************
 #define CALLSIGN "MAGNU"
 	// put your RTTY callsign here, max. 15 characters
 #define RTTY_DEVIATION 0x3
-	// RTTY shift = RTTY_DEVIATION x 270Hz
+	// RTTY shift = RTTY_DEVIATION x 267Hz
 #define RTTY_7BIT 1
 #define RTTY_USE_2_STOP_BITS   1
 #define RTTY_PRE_START_BITS  32
@@ -60,7 +59,7 @@
 	// Payload ID for use in Binary packets
 
 
-// If enabled, transmit incrementing tones in the 'idle' period between packets.
+// Ignored: Tx is always off between packets.
 #define MFSK_CONTINUOUS 1
 
 
@@ -69,10 +68,6 @@
 // If this is a flight you might prevent sonde from powered off by button
 #define ALLOW_DISABLE_BY_BUTTON 0
 
-
-//************* APRS Settings *************************
-// Note - APRS functionality was disabled and removed.
-//
 
 #endif
 

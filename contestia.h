@@ -32,12 +32,14 @@
  */
 #define CONTESTIA_NUMBER_OF_TONES 32
 #define CONTESTIA_CHARACTERS_PER_BLOCK 2
-#define CONTESTIA_CHANNEL_SPACING 1 /* Corresponds to 270 Hz */
+#define CONTESTIA_CHANNEL_SPACING 1 /* Corresponds to 267 Hz */
 #define CONTESTIA_SYMBOL_RATE 250
+#define OLIVIA_NUMBER_OF_TONES 64
 
-
-void contestia_start(char* data);
-void contestia_mfsk_encode_block(char* block, int8_t* tones);
+uint8_t contestia_block(char* data, char* outstring);
+void contestia_encode_block(char* block, int8_t* tones);
 void contestiaize(char* string, uint16_t length);
-uint8_t contestia_convert(char* string);
+uint8_t olivia_block(char* data, char* outstring);
+void olivia_encode_block(char* block, int8_t* tones);
+
 #endif /* CONTESTIA_H */
