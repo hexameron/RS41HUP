@@ -1,4 +1,4 @@
-# RS41HUP (Ham Use Project) - Project Horus Fork
+# RS41HUP (Ham Use Project) - Project Horus Fork with added FSK modes
 Firmware for RS41 for HAM use.
 
 It is possible to recycle RS41-SGP sondes for amateur radio use without any electrical changes! You just have to build a new firmware (this one) and apply it via a cheap programmer, the "ST-Linkv2" (or alternatives). The modified sonde can now transmit on a user-defined frequency in the 70cm band, with Habhub-compatible RTTY telemetry!
@@ -46,16 +46,22 @@ Refer to [this file](./docs/programming_header.md) for programming header pinout
 # Configuration
 Configuration settings are located in [config.h](./config.h). Modify as appropriate before compiling/programming.
 
-#Changelog
+# Changelog
  * 14.12.2016 - Reverse engineeded connections, initial hard work, resulting in working RTTY by SQ7FJB
  * 07.01.2017 - GPS now using proprietiary UBLOX protocol, more elastic code to set working frequency by SQ5RWU
  * 23.01.2017 - Test APRS code, small fixes in GPS code by SQ5RWU
  * 06.06.2017 - APRS code fix, some code cleanup
  * June 2017 - starting with Linux support, making configuration more flexible by DF8OE
  * March 2018 - Addition of 4FSK binary mode support by Mark VK5QI
+ * Late 2018 - Addition of 4FSK Olivia and Contestia 1000Hz modes
 
+# Warning
+ Some RS41s have been observed to lose transmitter PLL lock with internal chip temperatures below zero centigrade.
+Increasing Tx power and adding insulation can help. The RFM22b had a similar problem during the "coldest" parts
+of HAB flights, and that issue was mitigated by regularly resetting the chip.
 
-#TODO
+# TODO
+ * Resolve issue with loss of frequency lock at low temperature
  * Temperature and moisture sensor support (temperature should be the easiest to get going first...)
  * Implementing protocol for using external devices on extension header
  * Configuration via extension header (serial connection) without need for reflashing firmware

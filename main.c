@@ -18,6 +18,7 @@ void USART1_IRQHandler(void) {
 	}
 }
 
+//TODO: Do not enable Tx if the "disable" button was pushed
 void start_sending() {
 	radio_enable_tx();
 	tx_on = 1; // From here the timer interrupt handles things.
@@ -57,6 +58,7 @@ void TIM2_IRQHandler(void) {
 				}
 			} else {
 				if ( disable_armed ) {
+					// What does this do ?
 					GPIO_SetBits(GPIOA, GPIO_Pin_12);
 				}
 				button_pressed = 0;
