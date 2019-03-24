@@ -40,7 +40,6 @@ void stop_sending() {
 
 void TIM2_IRQHandler(void) {
 	static int mfsk_symbol = 0;
-	static int clockcount = 0;
 	static int preamble_byte = 20;
 
 	if ( TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET ) {
@@ -51,14 +50,15 @@ void TIM2_IRQHandler(void) {
 		if ( ALLOW_DISABLE_BY_BUTTON ) {
 			if ( ADCVal[1] > adc_bottom ) {
 				button_pressed++;
-				if ( button_pressed > (500 / 3) ) {
-					disable_armed = 1;
 					GPIO_ResetBits(GPIOB, RED);
+				if ( button_pressed > (150) ) {
+					disable_armed = 1;
+					GPIO_SetBits(GPIOB, RED);
 					GPIO_ResetBits(GPIOB, GREEN);
 				}
 			} else {
 				if ( disable_armed ) {
-					// What does this do ?
+					// Cut Battery power.
 					GPIO_SetBits(GPIOA, GPIO_Pin_12);
 				}
 				button_pressed = 0;
@@ -69,15 +69,10 @@ void TIM2_IRQHandler(void) {
 			}
 		}
 
-		int hz100, hz250;
-		if (++clockcount > 9)
-			clockcount = 0;
-		hz250 = clockcount & 1;
-		hz100 = ((clockcount == 5) || !clockcount) ? 1 : 0;
 
 		if ( tx_on ) {
 			// RTTY Symbol selection logic.
-			if (( current_mode == RTTY ) && hz100) {
+			if (current_mode == RTTY) {
 				send_rtty_status = send_rtty( (char *) tx_buffer);
 
 				if ( send_rtty_status == rttyEnd ) {
@@ -88,9 +83,7 @@ void TIM2_IRQHandler(void) {
 				} else if ( send_rtty_status == rttyZero ) {
 					radio_rw_register(0x73, 0x00, 1);
 				}
-			} else if ((( current_mode == SEND4FSK ) && hz100 )
-					|| (( current_mode == OLIVIA ) && hz250 )
-					|| (( current_mode == CONTEST ) && hz250 )) {
+			} else if ( current_mode == SEND4FSK ) {
 				// 4FSK Symbol Selection Logic
 				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
 
@@ -109,8 +102,8 @@ void TIM2_IRQHandler(void) {
 				}
 			} else {
 				// Preamble for horus_demod to lock on:
-				// Transmit continuous MFSK symbols at 50 baud.
-				if ( (current_mode == HORUS) && !clockcount) {
+				// Transmit continuous MFSK symbols
+				if (current_mode == HORUS) {
 					mfsk_symbol = (mfsk_symbol + 1) & 0x03;
 					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
 					if ( !preamble_byte-- ) {
@@ -138,7 +131,7 @@ void TIM2_IRQHandler(void) {
 				// Clear LEDs.
 				GPIO_SetBits(GPIOB, GREEN);
 				GPIO_SetBits(GPIOB, RED);
-				cun = 2000; // 4s off
+				cun = 400; // 4s off
 				pun = 0;
 			} else {
 				// If we have GPS lock, set LED
@@ -147,7 +140,7 @@ void TIM2_IRQHandler(void) {
 				if (led_enabled & 1)
 					GPIO_ResetBits(GPIOB, RED);
 				pun = 1;
-				cun = 200; // 0.4s on
+				cun = 40; // 0.4s on
 			}
 		}
 	}
@@ -167,7 +160,8 @@ int main(void) {
 	// NOTE - LEDs are inverted. (Reset to activate, Set to deactivate)
 	GPIO_SetBits(GPIOB, RED);
 	GPIO_ResetBits(GPIOB, GREEN);
-	USART_SendData(USART3, 0xc);
+	for (int i=0; i<5; i++)
+		USART_SendData(USART3, CALLSIGN[i]);
 
 	radio_soft_reset();
 	// setting RTTY TX frequency
@@ -208,18 +202,6 @@ int main(void) {
 				send_rtty_packet();
 		#endif
 			} else if ( current_mode == RTTY ) {
-				current_mode = OLIVIA;
-		#ifdef USE_OLIVIA
-				collect_telemetry_data();
-				send_contest_packet();
-		#endif
-			} else if ( current_mode == OLIVIA ) {
-				current_mode = CONTEST;
-		#ifdef USE_CONTESTIA
-				collect_telemetry_data();
-				send_contest_packet();
-		#endif
-			} else if ( current_mode == CONTEST ) {
 				current_mode = HORUS;
 		#ifdef USE_HORUS
 				collect_telemetry_data();
@@ -275,20 +257,20 @@ uint8_t fill_string() {
 	uint32_t lon_fl = (uint32_t) abs(abs(last_lon / 100) - lon_d * 100000);
 
 	// RTTY Sentence uses same format as Horus Binary, so can use same callsign.
-	sprintf(buf_mfsk, "%s,%d,%02u%02u%02u,%s%d.%05ld,%s%d.%05ld,%d,0,%d,%d,%d.%02d",
+	sprintf(buf_mfsk, "%s,%d,%02u%02u%02u,%s%d.%05ld,%s%d.%05ld,%d,%d,%d,%d,%d.%02d",
 			callsign,
 			send_count,
 			gpsData.hours, gpsData.minutes, gpsData.seconds,
 			last_lat < 0 ? "-" : "", lat_d, lat_fl,
 			last_lon < 0 ? "-" : "", lon_d, lon_fl,
 			(uint16_t)last_alt,
+			gpsData.bad_packets, // speed
 			gpsData.sats_raw,
 			si4032_temperature,
 			voltage / 100, voltage - 100 * (voltage/ 100)
 			);
 
 	// Calculate and append CRC16 checksum to end of sentence.
-	contestiaize(buf_mfsk, MAX_RTTY); // replace lower case chars etc.
 	CRC_rtty = string_CRC16_checksum(buf_mfsk);
 	return snprintf(buf_rtty, MAX_RTTY, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
 }
@@ -317,7 +299,7 @@ void send_mfsk_packet(){
 	BinaryPacket.Latitude = ublox2float(last_lat);
 	BinaryPacket.Longitude = ublox2float(last_lon);
 	BinaryPacket.Altitude = (uint16_t)(last_alt);
-	BinaryPacket.Speed = 0; //(uint8_t)(9 * gpsData.speed_raw / 2500);
+	BinaryPacket.Speed = gpsData.bad_packets; //(uint8_t)(9 * gpsData.speed_raw / 2500);
 	BinaryPacket.BattVoltage = volts_scaled;
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;
@@ -335,7 +317,7 @@ void send_mfsk_packet(){
 	start_sending();
 }
 
-
+#if 0
 void send_contest_packet(){
 	uint8_t rtty_len;
 	rtty_len = fill_string();
@@ -354,7 +336,7 @@ void send_contest_packet(){
 	tx_buffer = buf_mfsk;
 	start_sending();
 }
-
+#endif
 
 #ifdef  DEBUG
 void assert_failed(uint8_t* file, uint32_t line){

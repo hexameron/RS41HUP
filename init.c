@@ -58,7 +58,7 @@ void init_usart_debug() {
   USART_Cmd(USART3, DISABLE);
 
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
-  USART_InitStructure.USART_BaudRate = 19200; //0x9c4;
+  USART_InitStructure.USART_BaudRate = 38400; //	External Usart
   USART_InitStructure.USART_WordLength = USART_WordLength_8b;
   USART_InitStructure.USART_StopBits = USART_StopBits_1;
   USART_InitStructure.USART_Parity = USART_Parity_No;
@@ -229,7 +229,7 @@ void init_timer() {
 
   TIM2_TimeBaseInitStruct.TIM_Prescaler = 6 - 1;				// tick every 1/1000000 s
   TIM2_TimeBaseInitStruct.TIM_CounterMode = TIM_CounterMode_Up;
-  TIM2_TimeBaseInitStruct.TIM_Period = (uint16_t) ((1000000 / 500) - 1);	// fixed at 500 Hz: 2ms
+  TIM2_TimeBaseInitStruct.TIM_Period = (uint16_t) ((1000000 / 100) - 1);	// fixed at 100 Hz: 10ms
   TIM2_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
   TIM2_TimeBaseInitStruct.TIM_RepetitionCounter = 0;
 

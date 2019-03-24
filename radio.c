@@ -49,7 +49,7 @@ int8_t radio_read_temperature() {
   temp = radio_rw_register(0x11, 0xff, 0);
 
   // Convert ADC value to signed temperature value.
-  int16_t temp_2 = -64 + ((int16_t)temp * 5) / 10;
+  int16_t temp_2 = (int16_t)(temp >> 1) - 64 - 5;
 
   // Trigger ADC to capture another measurement.
   radio_rw_register(0x0f, 0x80, 1);

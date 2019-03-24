@@ -38,7 +38,7 @@ void _delay_us(uint16_t us, uint8_t precise) {
   TIM_Cmd(TIM3, ENABLE);
   done = 0;
   while(!done){
-
+	__WFI();
   }
   TIM_Cmd(TIM3, DISABLE);
 }

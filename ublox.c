@@ -15,9 +15,11 @@ volatile uint8_t nack_received = 0;
 
 void _sendSerialByte(uint8_t message) {
   while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET) {
+    _delay_ms(1);
   }
   USART_SendData(USART1, message);
   while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET) {
+    _delay_ms(1);
   }
 }
 
@@ -79,26 +81,26 @@ void ubx_powersave(){
 }
 
 void ublox_init(){
+  /* reset ublox at 9600 baud */
   uBloxPacket msgcfgrst = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x04, .payloadSize=sizeof(uBloxCFGRSTPayload)},
       .data.cfgrst = { .navBbrMask=0xffff, .resetMode=1, .reserved1 = 0}
   };
-  init_usart_gps(38400, 1);
-  _delay_ms(10);
-  send_ublox_packet(&msgcfgrst);
-  _delay_ms(800);
+
   init_usart_gps(9600, 1);
   _delay_ms(10);
   send_ublox_packet(&msgcfgrst);
   _delay_ms(800);
 
+  /* CFG_PRT: turn off all GPS NMEA strings on the uart, switch to 38400 baud rate */
   uBloxPacket msgcgprt = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x00, .payloadSize=sizeof(uBloxCFGPRTPayload)},
       .data.cfgprt = {.portID=1, .reserved1=0, .txReady=0, .mode=0b00100011000000, .baudRate=38400,
           .inProtoMask=1, .outProtoMask=1, .flags=0, .reserved2={0,0}}};
   send_ublox_packet(&msgcgprt);
-  init_usart_gps(38400, 1);
-
   _delay_ms(10);
-  // ubx_powersave();
+
+  /* switch uart from ublox default to 38400, needed to catch all messages */
+  init_usart_gps(38400, 1);
+  _delay_ms(10);
 
   uBloxPacket msgcfgmsg = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x01, .payloadSize=sizeof(uBloxCFGMSGPayload)},
     .data.cfgmsg = {.msgClass=0x01, .msgID=0x02, .rate=1}};
@@ -177,7 +179,6 @@ void ublox_handle_packet(uBloxPacket *pkt) {
       currentGPSData.seconds = pkt->data.navpvt.sec;
       currentGPSData.sats_raw = pkt->data.navpvt.numSV;
       currentGPSData.speed_raw = pkt->data.navpvt.gSpeed;
-
     } else if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x02){
       currentGPSData.ok_packets += 1;
       currentGPSData.lat_raw = pkt->data.navposllh.lat;
