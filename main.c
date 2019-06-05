@@ -20,6 +20,7 @@ void USART1_IRQHandler(void) {
 
 //TODO: Do not enable Tx if the "disable" button was pushed
 void start_sending() {
+	tx_mode = PREAMBLE;
 	radio_enable_tx();
 	tx_on = 1; // From here the timer interrupt handles things.
 }
@@ -47,13 +48,13 @@ void TIM2_IRQHandler(void) {
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
 
 		// BAD IDEA unless testing
-		// Code will be removed by compiler if flag is unset
-		if ( ALLOW_DISABLE_BY_BUTTON ) {
+		// Check button at 100 Hz
+		if ( ALLOW_DISABLE_BY_BUTTON && ! clockcount) {
 			if ( ADCVal[1] > adc_bottom ) {
 				button_pressed++;
+				GPIO_ResetBits(GPIOB, RED);
 				if ( button_pressed > (500 / 3) ) {
 					disable_armed = 1;
-					GPIO_ResetBits(GPIOB, RED);
 					GPIO_ResetBits(GPIOB, GREEN);
 				}
 			} else {
@@ -69,28 +70,11 @@ void TIM2_IRQHandler(void) {
 			}
 		}
 
-		int hz100, hz250;
 		if (++clockcount > 9)
 			clockcount = 0;
-		hz250 = clockcount & 1;
-		hz100 = ((clockcount == 5) || !clockcount) ? 1 : 0;
 
 		if ( tx_on ) {
-			// RTTY Symbol selection logic.
-			if (( current_mode == RTTY ) && hz100) {
-				send_rtty_status = send_rtty( (char *) tx_buffer);
-
-				if ( send_rtty_status == rttyEnd ) {
-					if ( *(++tx_buffer) == 0 )
-						stop_sending();
-				} else if ( send_rtty_status == rttyOne ) {
-					radio_rw_register(0x73, RTTY_DEVIATION, 1);
-				} else if ( send_rtty_status == rttyZero ) {
-					radio_rw_register(0x73, 0x00, 1);
-				}
-			} else if ((( current_mode == SEND4FSK ) && hz100 )
-					|| (( current_mode == OLIVIA ) && hz250 )
-					|| (( current_mode == CONTEST ) && hz250 )) {
+			if ( tx_mode == SEND4FSK ) {
 				// 4FSK Symbol Selection Logic
 				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
 
@@ -105,18 +89,18 @@ void TIM2_IRQHandler(void) {
 				}
 				// Set the symbol!
 				if ( mfsk_symbol != -1 ) {
-					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
+					radio_rw_register(0x73, (uint8_t)(FSK_SHIFT * mfsk_symbol), 1);
 				}
 			} else {
 				// Preamble for horus_demod to lock on:
-				// Transmit continuous MFSK symbols at 50 baud.
-				if ( (current_mode == HORUS) && !clockcount) {
+				// Transmit continuous MFSK symbols at 100 baud.
+				if ( !clockcount) {
 					mfsk_symbol = (mfsk_symbol + 1) & 0x03;
-					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
+					radio_rw_register(0x73, (uint8_t)(FSK_SHIFT * mfsk_symbol), 1);
 					if ( !preamble_byte-- ) {
 						preamble_byte = 20;
 						// start sending data
-						current_mode = SEND4FSK;
+						tx_mode = SEND4FSK;
 					}
 				}
 
@@ -138,7 +122,7 @@ void TIM2_IRQHandler(void) {
 				// Clear LEDs.
 				GPIO_SetBits(GPIOB, GREEN);
 				GPIO_SetBits(GPIOB, RED);
-				cun = 2000; // 4s off
+				cun = 4000; // 4s off
 				pun = 0;
 			} else {
 				// If we have GPS lock, set LED
@@ -147,7 +131,7 @@ void TIM2_IRQHandler(void) {
 				if (led_enabled & 1)
 					GPIO_ResetBits(GPIOB, RED);
 				pun = 1;
-				cun = 200; // 0.4s on
+				cun = 300; // 0.3s on
 			}
 		}
 	}
@@ -187,7 +171,7 @@ int main(void) {
 
 	// ADC configuration
 	radio_rw_register(0x0f, 0x80, 1);
-	tx_buffer = buf_rtty;
+	tx_buffer = buf_mfsk;
 	tx_on = 0;
 	tx_enable = 1;
 
@@ -201,33 +185,10 @@ int main(void) {
 	while ( 1 ) {
 		// Don't do anything until the previous transmission has finished.
 		if ( tx_on == 0 && tx_enable ) {
-			if ( current_mode == STARTUP ) {
-				current_mode = RTTY;
-		#ifdef USE_RTTY
-				collect_telemetry_data();
-				send_rtty_packet();
-		#endif
-			} else if ( current_mode == RTTY ) {
-				current_mode = OLIVIA;
-		#ifdef USE_OLIVIA
-				collect_telemetry_data();
-				send_contest_packet();
-		#endif
-			} else if ( current_mode == OLIVIA ) {
-				current_mode = CONTEST;
-		#ifdef USE_CONTESTIA
-				collect_telemetry_data();
-				send_contest_packet();
-		#endif
-			} else if ( current_mode == CONTEST ) {
-				current_mode = HORUS;
-		#ifdef USE_HORUS
+		// 1 Telemetry PACKET
 				collect_telemetry_data();
 				send_mfsk_packet();
-		#endif
-			} else {
-				current_mode = STARTUP;
-			}
+		// else 15 SSDV PACKETS
 		} else {
 			NVIC_SystemLPConfig(NVIC_LP_SEVONPEND, DISABLE);
 			__WFI();
@@ -264,44 +225,6 @@ void collect_telemetry_data() {
 	}
 }
 
-
-uint8_t fill_string() {
-	// Write a UKHAS format string into the RTTY buffer.
-
-	// Convert raw lat/lon values into degrees and decimal degree values.
-	uint8_t lat_d = (uint8_t) abs(last_lat / 10000000);
-	uint32_t lat_fl = (uint32_t) abs(abs(last_lat / 100) - lat_d * 100000);
-	uint8_t lon_d = (uint8_t) abs(last_lon / 10000000);
-	uint32_t lon_fl = (uint32_t) abs(abs(last_lon / 100) - lon_d * 100000);
-
-	// RTTY Sentence uses same format as Horus Binary, so can use same callsign.
-	sprintf(buf_mfsk, "%s,%d,%02u%02u%02u,%s%d.%05ld,%s%d.%05ld,%d,0,%d,%d,%d.%02d",
-			callsign,
-			send_count,
-			gpsData.hours, gpsData.minutes, gpsData.seconds,
-			last_lat < 0 ? "-" : "", lat_d, lat_fl,
-			last_lon < 0 ? "-" : "", lon_d, lon_fl,
-			(uint16_t)last_alt,
-			gpsData.sats_raw,
-			si4032_temperature,
-			voltage / 100, voltage - 100 * (voltage/ 100)
-			);
-
-	// Calculate and append CRC16 checksum to end of sentence.
-	contestiaize(buf_mfsk, MAX_RTTY); // replace lower case chars etc.
-	CRC_rtty = string_CRC16_checksum(buf_mfsk);
-	return snprintf(buf_rtty, MAX_RTTY, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
-}
-
-void send_rtty_packet() {
-	// Write a string into the tx buffer, and start RTTY transmission.
-	fill_string();
-	tx_buffer = buf_rtty;
-	start_bits = RTTY_PRE_START_BITS;
-	start_sending();
-}
-
-
 void send_mfsk_packet(){
 	// Generate a MFSK Binary Packet
 
@@ -334,27 +257,6 @@ void send_mfsk_packet(){
 	tx_buffer = buf_mfsk;
 	start_sending();
 }
-
-
-void send_contest_packet(){
-	uint8_t rtty_len;
-	rtty_len = fill_string();
-
-	// Convert rtty string into 4fsk symbols
-	packet_length = 0;
-	memset(buf_mfsk, 0, MAX_MFSK);
-	for (int index = 0; index < rtty_len; index +=2) {
-		// convert two chars at a time
-		if ( current_mode == OLIVIA ) {
-			packet_length += olivia_block( &buf_rtty[index],  &buf_mfsk[packet_length] );
-		} else {
-			packet_length += contestia_block( &buf_rtty[index],  &buf_mfsk[packet_length] );
-		}
-	}
-	tx_buffer = buf_mfsk;
-	start_sending();
-}
-
 
 #ifdef  DEBUG
 void assert_failed(uint8_t* file, uint32_t line){

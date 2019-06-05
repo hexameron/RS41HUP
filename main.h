@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <misc.h>
-#include "f_rtty.h"
 #include "init.h"
 #include "config.h"
 #include "radio.h"
@@ -22,7 +21,6 @@
 #include "util.h"
 #include "mfsk.h"
 #include "horus_l2.h"
-#include "contestia.h"
 
 // IO Pins Definitions. The state of these pins are initilised in init.c
 #define GREEN  GPIO_Pin_7
@@ -30,14 +28,8 @@
 #define RED  GPIO_Pin_8
 	// Non-Inverted (?)
 
-// Transmit Modulation Switching
-#define STARTUP 0
-#define RTTY 1
-#define HORUS 2
-#define OLIVIA 3
-#define CONTEST 4
-#define SEND4FSK 5
-volatile int current_mode = STARTUP;
+#define PREAMBLE 0
+#define SEND4FSK 1
 
 // Telemetry Data to Transmit - used in RTTY & MFSK packet generation functions.
 unsigned int send_count;        //frame counter
@@ -46,13 +38,12 @@ int8_t si4032_temperature;
 GPSEntry gpsData;
 
 char callsign[15] = {CALLSIGN};
-char status[2] = {'N'};
-uint16_t CRC_rtty = 0x12ab;  //checksum (dummy initial value)
+uint16_t CRC_ssdv = 0xdead;	//checksum (dummy initial value)
 
-#define MAX_RTTY 90
-#define MAX_MFSK (10 * MAX_RTTY)
-char buf_rtty[MAX_RTTY]; // Usually less than 80 chars
-char buf_mfsk[MAX_MFSK]; // contestia buffer needs to be 4x longer than rtty string
+#define MAX_SSDV  224	/* No FEC image packet */
+#define MAX_MFSK (2 * MAX_SSDV + 4 + 22) /* (23,12) FEC  & preamble & padding */
+char buf_ssdv[MAX_SSDV]; // sliced and packed image data
+char buf_mfsk[MAX_MFSK]; // tx buffer needs to be 2x longer than input string
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;
@@ -63,13 +54,12 @@ volatile unsigned int cun = 1000; // 2 seconds of green LED at startup
 volatile unsigned char tx_on = 0;
 volatile unsigned int tx_on_delay;
 volatile unsigned char tx_enable = 0;
-rttyStates send_rtty_status = rttyZero;
 volatile char *tx_buffer;
 volatile uint16_t current_mfsk_byte = 0;
 volatile uint16_t packet_length = 0;
 volatile uint16_t button_pressed = 0;
 volatile uint8_t disable_armed = 0;
-
+static int tx_mode = SEND4FSK;
 
 // Binary Packet Format
 // Note that we need to pack this to 1-byte alignment, hence the #pragma flags below
@@ -96,8 +86,6 @@ uint16_t  Checksum; // CRC16-CCITT Checksum.
 
 // Function Definitions
 void collect_telemetry_data();
-void send_rtty_packet();
 void send_mfsk_packet();
-void send_contest_packet();
 uint16_t gps_CRC16_checksum (char *string);
 
