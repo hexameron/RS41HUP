@@ -185,10 +185,12 @@ int main(void) {
 	while ( 1 ) {
 		// Don't do anything until the previous transmission has finished.
 		if ( tx_on == 0 && tx_enable ) {
-		// 1 Telemetry PACKET
+			if (1 & framecount++) {
+				dummy_ssdv_packet();
+			} else {
 				collect_telemetry_data();
 				send_mfsk_packet();
-		// else 15 SSDV PACKETS
+			}
 		} else {
 			NVIC_SystemLPConfig(NVIC_LP_SEVONPEND, DISABLE);
 			__WFI();
@@ -231,7 +233,6 @@ void send_mfsk_packet(){
 	uint8_t volts_scaled = (uint8_t)(51 * voltage / 100);
 
 	// Assemble a binary packet
-	struct TBinaryPacket BinaryPacket;
 	BinaryPacket.PayloadID = BINARY_PAYLOAD_ID % 256;
 	BinaryPacket.Counter = send_count;
 	BinaryPacket.Hours = gpsData.hours;
@@ -247,10 +248,37 @@ void send_mfsk_packet(){
 
 	BinaryPacket.Checksum = (uint16_t)array_CRC16_checksum( (char*)&BinaryPacket,sizeof(BinaryPacket) - 2);
 
+	// Wrap a long packet around a legacy packet.
+	memcpy(buf_ssdv, &BinaryPacket, sizeof(BinaryPacket));
+	int32_t CRC32_checksum = gen_crc32(buf_ssdv, LONG_BINARY - 4);
+	buf_ssdv[LONG_BINARY - 1] = (CRC32_checksum >> 0) & 0xff;
+	buf_ssdv[LONG_BINARY - 2] = (CRC32_checksum >> 8) & 0xff;
+	buf_ssdv[LONG_BINARY - 3] = (CRC32_checksum >>16) & 0xff;
+	buf_ssdv[LONG_BINARY - 4] = (CRC32_checksum >>24) & 0xff;
+
 	// Write Preamble characters into mfsk buffer.
 	sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b");
+
 	// Encode the packet, and write into the mfsk buffer.
-	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4,(unsigned char*)&BinaryPacket,sizeof(BinaryPacket) );
+	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4, buf_ssdv, LONG_BINARY );
+
+	// Data to transmit is the coded packet length, plus the 4-byte preamble.
+	packet_length = coded_len + 4;
+	tx_buffer = buf_mfsk;
+	start_sending();
+}
+
+void dummy_ssdv_packet() {
+	// Wrap a long packet around a legacy packet.
+	memcpy(buf_ssdv, &BinaryPacket, sizeof(BinaryPacket));
+	int32_t CRC32_checksum = gen_crc32(buf_ssdv, SSDV_SIZE - 4);
+	buf_ssdv[SSDV_SIZE - 1] = (CRC32_checksum >> 0) & 0xff;
+	buf_ssdv[SSDV_SIZE - 2] = (CRC32_checksum >> 8) & 0xff;
+	buf_ssdv[SSDV_SIZE - 3] = (CRC32_checksum >>16) & 0xff;
+	buf_ssdv[SSDV_SIZE - 4] = (CRC32_checksum >>24) & 0xff;
+
+	// Encode the packet, and write into the mfsk buffer.
+	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4, buf_ssdv, SSDV_SIZE );
 
 	// Data to transmit is the coded packet length, plus the 4-byte preamble.
 	packet_length = coded_len + 4;

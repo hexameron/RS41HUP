@@ -24,9 +24,9 @@
 
 // IO Pins Definitions. The state of these pins are initilised in init.c
 #define GREEN  GPIO_Pin_7
-	// Inverted
+	// Active low
 #define RED  GPIO_Pin_8
-	// Non-Inverted (?)
+	// Active low
 
 #define PREAMBLE 0
 #define SEND4FSK 1
@@ -38,12 +38,11 @@ int8_t si4032_temperature;
 GPSEntry gpsData;
 
 char callsign[15] = {CALLSIGN};
-uint16_t CRC_ssdv = 0xdead;	//checksum (dummy initial value)
 
-#define MAX_SSDV  224	/* No FEC image packet */
-#define MAX_MFSK (2 * MAX_SSDV + 4 + 22) /* (23,12) FEC  & preamble & padding */
-char buf_ssdv[MAX_SSDV]; // sliced and packed image data
-char buf_mfsk[MAX_MFSK]; // tx buffer needs to be 2x longer than input string
+#define SSDV_SIZE  255			/* SSDV packet without initial 0x55 sync byte*/
+#define MAX_MFSK (2 * SSDV_SIZE + 9)	/* (23,12) FEC  & preambles */
+uint8_t buf_ssdv[SSDV_SIZE];		// packed image packet
+char buf_mfsk[MAX_MFSK];		// FEC appended and interleaved
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;
@@ -60,6 +59,7 @@ volatile uint16_t packet_length = 0;
 volatile uint16_t button_pressed = 0;
 volatile uint8_t disable_armed = 0;
 static int tx_mode = SEND4FSK;
+static int framecount = 0;
 
 // Binary Packet Format
 // Note that we need to pack this to 1-byte alignment, hence the #pragma flags below
@@ -83,9 +83,11 @@ uint16_t  Checksum; // CRC16-CCITT Checksum.
 };  //  __attribute__ ((packed)); // Doesn't work?
 #pragma pack(pop)
 
+struct TBinaryPacket BinaryPacket;
+#define LONG_BINARY 32	/* extended format, undefined */
 
 // Function Definitions
 void collect_telemetry_data();
 void send_mfsk_packet();
 uint16_t gps_CRC16_checksum (char *string);
-
+void dummy_ssdv_packet();
