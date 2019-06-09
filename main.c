@@ -18,20 +18,26 @@ void USART1_IRQHandler(void) {
 	}
 }
 
-//TODO: Do not enable Tx if the "disable" button was pushed
 void start_sending() {
 	tx_mode = PREAMBLE;
 	radio_enable_tx();
-	tx_on = 1; // From here the timer interrupt handles things.
+	tx_on = 1;	// From here the timer interrupt handles things.
+	tx_on_delay = TX_DELAY;	// leave a gap before next packet
 }
 
-
+/* called from inside interrupt */
 void stop_sending() {
 	current_mfsk_byte = 0;  // reset next sentence to start
-	tx_on = 0;		// sending data(1) or idle tones(0)
-	tx_on_delay = TX_DELAY;
+	tx_on = 0;		// not sending data or preamble
 	tx_enable = 0;		// allow next sentence after idle period
 	radio_disable_tx();	// no transmit powersave
+}
+
+void radio_blip() {
+	tx_mode = IDLE4FSK;
+	tx_on = 1;
+	tx_on_delay = NO_SSDV_DELAY;
+	radio_enable_tx();
 }
 
 //
@@ -75,9 +81,7 @@ void TIM2_IRQHandler(void) {
 
 		if ( tx_on ) {
 			if ( tx_mode == SEND4FSK ) {
-				// 4FSK Symbol Selection Logic
 				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
-
 				if ( mfsk_symbol == -1 ) {
 					// Reached the end of the current character, increment the current-byte pointer.
 					if ( current_mfsk_byte++ >= packet_length ) {
@@ -98,9 +102,12 @@ void TIM2_IRQHandler(void) {
 					mfsk_symbol = (mfsk_symbol + 1) & 0x03;
 					radio_rw_register(0x73, (uint8_t)(FSK_SHIFT * mfsk_symbol), 1);
 					if ( !preamble_byte-- ) {
-						preamble_byte = 20;
-						// start sending data
-						tx_mode = SEND4FSK;
+						preamble_byte = 12;
+						// switch mode
+						if (tx_mode == IDLE4FSK)
+							stop_sending();
+						else
+							tx_mode = SEND4FSK;
 					}
 				}
 
@@ -109,7 +116,7 @@ void TIM2_IRQHandler(void) {
 		} else {
 			// TX is off
 
-			// tx_on_delay is set at the end of a Transmission above, and counts down
+			// tx_on_delay starts at the end of the Transmission above, and counts down
 			// at the interrupt rate. When it hits zero, we set tx_enable to 1, which allows
 			// the main loop to continue.
 			if ( !tx_on_delay-- )
@@ -151,7 +158,7 @@ int main(void) {
 	// NOTE - LEDs are inverted. (Reset to activate, Set to deactivate)
 	GPIO_SetBits(GPIOB, RED);
 	GPIO_ResetBits(GPIOB, GREEN);
-	USART_SendData(USART3, 0xc);
+	// USART_SendData(USART3, 0xc);
 
 	radio_soft_reset();
 	// setting RTTY TX frequency
@@ -184,9 +191,9 @@ int main(void) {
 
 	while ( 1 ) {
 		// Don't do anything until the previous transmission has finished.
-		if ( tx_on == 0 && tx_enable ) {
+		if ( tx_enable && !tx_on ) {
 			if (1 & framecount++) {
-				dummy_ssdv_packet();
+				send_ssdv_packet();
 			} else {
 				collect_telemetry_data();
 				send_mfsk_packet();
@@ -256,7 +263,7 @@ void send_mfsk_packet(){
 	buf_ssdv[LONG_BINARY - 3] = (CRC32_checksum >>16) & 0xff;
 	buf_ssdv[LONG_BINARY - 4] = (CRC32_checksum >>24) & 0xff;
 
-	// Write Preamble characters into mfsk buffer.
+	// Why do we need a  Preamble?
 	sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b");
 
 	// Encode the packet, and write into the mfsk buffer.
@@ -268,19 +275,13 @@ void send_mfsk_packet(){
 	start_sending();
 }
 
-void dummy_ssdv_packet() {
-	// Wrap a long packet around a legacy packet.
-	memcpy(buf_ssdv, &BinaryPacket, sizeof(BinaryPacket));
-	int32_t CRC32_checksum = gen_crc32(buf_ssdv, SSDV_SIZE - 4);
-	buf_ssdv[SSDV_SIZE - 1] = (CRC32_checksum >> 0) & 0xff;
-	buf_ssdv[SSDV_SIZE - 2] = (CRC32_checksum >> 8) & 0xff;
-	buf_ssdv[SSDV_SIZE - 3] = (CRC32_checksum >>16) & 0xff;
-	buf_ssdv[SSDV_SIZE - 4] = (CRC32_checksum >>24) & 0xff;
-
-	// Encode the packet, and write into the mfsk buffer.
-	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4, buf_ssdv, SSDV_SIZE );
-
-	// Data to transmit is the coded packet length, plus the 4-byte preamble.
+void send_ssdv_packet() {
+	uint8_t status = fill_image_packet(buf_ssdv);
+	if (!status) {
+		radio_blip();
+		return;
+	}
+	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4, buf_ssdv + 1, SSDV_SIZE );
 	packet_length = coded_len + 4;
 	tx_buffer = buf_mfsk;
 	start_sending();

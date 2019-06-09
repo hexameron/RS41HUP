@@ -29,18 +29,18 @@ Adafruit sell 2.54mm to 2mm patch leads (available from other resellers)
 
 ## STLink-v2 Header to Vaisala Cable
 ```
-RS41			STLink 
-------------------------------
-1 or	 10	GND	4
-2		N/C
-3		N/C
+RS41		STLink		UART
+------------------------------------
+1		(GND)		GND
+2		N/C		RX
+3		N/C		TX
 4		POWER	1
-5		N/C
+5		N/C		(3.3v)
 6		N/C
 7		RESET	15
 8		CLOCK	9
 9		DATA	7
-10 or	1	GND	4
+10		GND	4
 ```
 All other pins on STLink header not connected.  
 When using the Adafruit patch leads it is more convenient to use

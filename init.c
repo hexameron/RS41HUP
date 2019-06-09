@@ -58,7 +58,7 @@ void init_usart_debug() {
   USART_Cmd(USART3, DISABLE);
 
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
-  USART_InitStructure.USART_BaudRate = 19200; //0x9c4;
+  USART_InitStructure.USART_BaudRate = 38400; // TTL camera default
   USART_InitStructure.USART_WordLength = USART_WordLength_8b;
   USART_InitStructure.USART_StopBits = USART_StopBits_1;
   USART_InitStructure.USART_Parity = USART_Parity_No;
@@ -109,13 +109,13 @@ void init_port()
   	GPIO_Init(GPIOB, &GPIO_Conf);
 
 	// SPI2_SCK & SPI2_MOSI
-    GPIO_Conf.GPIO_Pin = GPIO_Pin_13 | radioSDIpin;
+    GPIO_Conf.GPIO_Pin = GPIO_Pin_13 | radioSDIpin; // GPIO PBB13 MOSI
  	GPIO_Conf.GPIO_Mode = GPIO_Mode_AF_PP;
  	GPIO_Conf.GPIO_Speed = GPIO_Speed_10MHz;
  	GPIO_Init(GPIOB, &GPIO_Conf);
 
 	// SPI2_MISO
- 	GPIO_Conf.GPIO_Pin = GPIO_Pin_14;
+ 	GPIO_Conf.GPIO_Pin = GPIO_Pin_14;	// GPIO PBB14 MISO
  	GPIO_Conf.GPIO_Mode = GPIO_Mode_IN_FLOATING;
  	GPIO_Init(GPIOB, &GPIO_Conf);
 
@@ -139,11 +139,11 @@ void init_port()
 
   init_usart_gps(9600, 0);
 
-	GPIO_Conf.GPIO_Pin = GPIO_Pin_10;
+	GPIO_Conf.GPIO_Pin = GPIO_Pin_10; // GPIO PBB10 Tx
 	GPIO_Conf.GPIO_Mode = GPIO_Mode_AF_PP;
 	GPIO_Conf.GPIO_Speed = GPIO_Speed_10MHz;
 	GPIO_Init(GPIOB, &GPIO_Conf);
-	GPIO_Conf.GPIO_Pin = GPIO_Pin_11;
+	GPIO_Conf.GPIO_Pin = GPIO_Pin_11; // GPIO PBB11 Rx
 	GPIO_Conf.GPIO_Mode = GPIO_Mode_IN_FLOATING;
 	GPIO_Init(GPIOB, &GPIO_Conf);
 

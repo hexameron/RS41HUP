@@ -30,6 +30,7 @@
 
 #define PREAMBLE 0
 #define SEND4FSK 1
+#define IDLE4FSK 2
 
 // Telemetry Data to Transmit - used in RTTY & MFSK packet generation functions.
 unsigned int send_count;        //frame counter
@@ -37,12 +38,11 @@ int voltage;
 int8_t si4032_temperature;
 GPSEntry gpsData;
 
-char callsign[15] = {CALLSIGN};
-
-#define SSDV_SIZE  255			/* SSDV packet without initial 0x55 sync byte*/
-#define MAX_MFSK (2 * SSDV_SIZE + 9)	/* (23,12) FEC  & preambles */
-uint8_t buf_ssdv[SSDV_SIZE];		// packed image packet
-char buf_mfsk[MAX_MFSK];		// FEC appended and interleaved
+#define NO_SSDV_DELAY 1000		/* Half as long as a real packet */
+#define SSDV_SIZE  255			/* SSDV packet checksum length  */
+#define MAX_MFSK (2 * SSDV_SIZE + 8)	/* (23,12) FEC  & preambles     */
+uint8_t buf_ssdv[1 + SSDV_SIZE];	/* image packet with 0x55 sync  */
+char buf_mfsk[MAX_MFSK];		/* FEC appended and interleaved */
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;
@@ -58,7 +58,7 @@ volatile uint16_t current_mfsk_byte = 0;
 volatile uint16_t packet_length = 0;
 volatile uint16_t button_pressed = 0;
 volatile uint8_t disable_armed = 0;
-static int tx_mode = SEND4FSK;
+static int tx_mode = PREAMBLE;
 static int framecount = 0;
 
 // Binary Packet Format
@@ -90,4 +90,5 @@ struct TBinaryPacket BinaryPacket;
 void collect_telemetry_data();
 void send_mfsk_packet();
 uint16_t gps_CRC16_checksum (char *string);
-void dummy_ssdv_packet();
+void send_ssdv_packet();
+uint8_t fill_image_packet(uint8_t *pkt);

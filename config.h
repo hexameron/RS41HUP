@@ -19,7 +19,7 @@
 // and set this value to that.
 // Refer to the payload ID list here: https://github.com/projecthorus/horusbinary/blob/master/payload_id_list.txt
 #define BINARY_PAYLOAD_ID 0
-#define CALLSIGN "4FSKTEST"
+#define CALLSIGN "4FSK"
 	// put your SSDV callsign here, max. 6 characters uppercase
 
 // TX Power
@@ -44,7 +44,7 @@
 #define OFF_TIME 5
 #define TX_DELAY  (1000 * OFF_TIME)
 
-// 5 * 266 Hz = 1300 Hz tone spacing, for 5000 Hz Bandwidth
+// 5 * 266 Hz = 1330 Hz tone spacing, for 5000 Hz Bandwidth
 #define FSK_SHIFT 5
 
 //***********Other Settings ******************
