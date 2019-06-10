@@ -40,9 +40,9 @@ GPSEntry gpsData;
 
 #define NO_SSDV_DELAY 1000		/* Half as long as a real packet */
 #define SSDV_SIZE  255			/* SSDV packet checksum length  */
-#define MAX_MFSK (2 * SSDV_SIZE + 8)	/* (23,12) FEC  & preambles     */
-uint8_t buf_ssdv[1 + SSDV_SIZE];	/* image packet with 0x55 sync  */
+#define MAX_MFSK (2 * SSDV_SIZE)	/* (23,12) FEC  & preambles     */
 char buf_mfsk[MAX_MFSK];		/* FEC appended and interleaved */
+uint8_t buf_ssdv[MAX_MFSK];		/*  Temporary packet storage */
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;

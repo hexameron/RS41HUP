@@ -20,7 +20,8 @@
 #include <stdint.h>
 #include <string.h>
 #include "ssdv.h"
-#include "rs8.h"
+
+#define fprintf(X,...)
 
 /* Recognised JPEG markers */
 enum {
@@ -641,6 +642,7 @@ static char ssdv_process(ssdv_t *s)
 static void ssdv_set_packet_conf(ssdv_t *s)
 {
 	/* Configure the payload size and CRC position */
+#if 0
 	switch(s->type)
 	{
 	case SSDV_TYPE_NORMAL:
@@ -649,10 +651,11 @@ static void ssdv_set_packet_conf(ssdv_t *s)
 		break;
 	
 	case SSDV_TYPE_NOFEC:
+#endif
 		s->pkt_size_payload = SSDV_PKT_SIZE - SSDV_PKT_SIZE_HEADER - SSDV_PKT_SIZE_CRC;
 		s->pkt_size_crcdata = SSDV_PKT_SIZE_HEADER + s->pkt_size_payload - 1;
-		break;
-	}
+//		break;
+//	}
 }
 
 /*****************************************************************************/
@@ -1085,11 +1088,11 @@ char ssdv_enc_get_packet(ssdv_t *s)
 				s->out[i++] = (x >> 16) & 0xFF;
 				s->out[i++] = (x >> 8) & 0xFF;
 				s->out[i++] = x & 0xFF;
-				
+#if 0
 				/* Generate the RS codes */
 				if(s->type == SSDV_TYPE_NORMAL)
 					encode_rs_8(&s->out[1], &s->out[i], 0);
-				
+#endif
 				s->packet_id++;
 				
 				/* Have we reached the end of the image data? */

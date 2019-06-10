@@ -10,7 +10,6 @@
 #include "config.h"
 #include <stdio.h>
 #include <string.h>
-#include "rs8.h"
 #include "ssdv.h"
 #include "pisky.h"
 

@@ -43,7 +43,7 @@ extern "C" {
 #define SSDV_MAX_CALLSIGN (6) /* Maximum number of characters in a callsign */
 
 #define SSDV_TYPE_INVALID (0xFF)
-#define SSDV_TYPE_NORMAL  (0x00)
+//#define SSDV_TYPE_NORMAL  (0x00)
 #define SSDV_TYPE_NOFEC   (0x01)
 
 #define SSDV_QUALITY_NORMAL (0x04)
@@ -51,8 +51,7 @@ extern "C" {
 typedef struct
 {
 	/* Packet type configuration */
-	uint8_t type; /* 0 = Normal mode (224 byte packet + 32 bytes FEC),
-	                 1 = No-FEC mode (256 byte packet) */
+	uint8_t type; /* 1 = No-FEC mode (256 byte packet) */
 	uint16_t pkt_size_payload;
 	uint16_t pkt_size_crcdata;
 	
