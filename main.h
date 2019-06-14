@@ -19,7 +19,6 @@
 #include "ublox.h"
 #include "delay.h"
 #include "util.h"
-#include "mfsk.h"
 #include "horus_l2.h"
 
 // IO Pins Definitions. The state of these pins are initilised in init.c
@@ -43,6 +42,7 @@ GPSEntry gpsData;
 #define MAX_MFSK (2 * SSDV_SIZE)	/* (23,12) FEC  & preambles     */
 char buf_mfsk[MAX_MFSK];		/* FEC appended and interleaved */
 uint8_t buf_ssdv[MAX_MFSK];		/*  Temporary packet storage */
+static char callsign[8] = {CALLSIGN};
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;
@@ -67,7 +67,7 @@ static int framecount = 0;
 #pragma pack(push,1) 
 struct TBinaryPacket
 {
-uint8_t   PayloadID;
+uint8_t   PayloadID; // type 32, or legacy ID < 32
 uint16_t  Counter;
 uint8_t   Hours;
 uint8_t   Minutes;
@@ -79,8 +79,11 @@ uint8_t   Speed; // Speed in Knots (1-255 knots)
 uint8_t   Sats;
 int8_t    Temp; // -64 to +64; SI4032 internal chip temp.
 uint8_t   BattVoltage; // 0 = 0v, 255 = 5.0V, linear steps in-between.
-uint16_t  Checksum; // CRC16-CCITT Checksum.
-};  //  __attribute__ ((packed)); // Doesn't work?
+uint16_t  User1;	// legacy CRC16-CCITT Checksum.
+uint16_t  User2;	// Undefined
+uint32_t  NameID;	// SSDV style 6 chars base 40
+uint32_t  Checksum32;	// SSDV style checksum
+}; // 22 byte legacy + 2+4+4
 #pragma pack(pop)
 
 struct TBinaryPacket BinaryPacket;
@@ -89,6 +92,7 @@ struct TBinaryPacket BinaryPacket;
 // Function Definitions
 void collect_telemetry_data();
 void send_mfsk_packet();
-uint16_t gps_CRC16_checksum (char *string);
 void send_ssdv_packet();
 uint8_t fill_image_packet(uint8_t *pkt);
+uint32_t encode_callsign(char *callsign);
+uint32_t crc32(void *data, size_t length);

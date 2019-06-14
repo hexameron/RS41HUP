@@ -25,14 +25,6 @@ void start_sending() {
 	tx_on_delay = TX_DELAY;	// leave a gap before next packet
 }
 
-/* called from inside interrupt */
-void stop_sending() {
-	current_mfsk_byte = 0;  // reset next sentence to start
-	tx_on = 0;		// not sending data or preamble
-	tx_enable = 0;		// allow next sentence after idle period
-	radio_disable_tx();	// no transmit powersave
-}
-
 void radio_blip() {
 	tx_mode = IDLE4FSK;
 	tx_on = 1;
@@ -40,6 +32,30 @@ void radio_blip() {
 	radio_enable_tx();
 }
 
+/* Step through a byte, and return 4FSK symbols.*/
+static inline int get_mfsk() {
+	static uint8_t deminibble = 0;
+	uint8_t c;
+
+	if (deminibble == 8){
+		deminibble = 0;
+		current_mfsk_byte++;
+		if ( current_mfsk_byte >= packet_length )
+			return -1;
+	}
+
+	// Get the current symbol (2-bits MSB)
+	c = tx_buffer[current_mfsk_byte];
+	deminibble += 2;
+	return (0x3) & (c >> (8 - deminibble));
+}
+
+static inline void stop_sending() {
+	current_mfsk_byte = 0;  // reset next sentence to start
+	tx_on = 0;		// not sending data or preamble
+	tx_enable = 0;		// allow next sentence after idle period
+	radio_disable_tx();	// no transmit powersave
+}
 //
 // Symbol Timing Interrupt
 // In here symbol transmission occurs.
@@ -53,46 +69,38 @@ void TIM2_IRQHandler(void) {
 	if ( TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET ) {
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
 
-		// BAD IDEA unless testing
-		// Check button at 100 Hz
+		/* divide by 10 for preamble and button press */
+		if (++clockcount > 9)
+			clockcount = 0;
+
+		// Trusting Poweroff to an ADC button is a BAD IDEA unless testing
 		if ( ALLOW_DISABLE_BY_BUTTON && ! clockcount) {
 			if ( ADCVal[1] > adc_bottom ) {
 				button_pressed++;
-				GPIO_ResetBits(GPIOB, RED);
+				GPIO_ResetBits(GPIOB, RED); // warn on button press
 				if ( button_pressed > (500 / 3) ) {
-					disable_armed = 1;
+					disable_armed = 1; // start button held down
 					GPIO_ResetBits(GPIOB, GREEN);
 				}
 			} else {
 				if ( disable_armed ) {
-					// What does this do ?
+					// cut battery power when button released !
 					GPIO_SetBits(GPIOA, GPIO_Pin_12);
 				}
-				button_pressed = 0;
+				button_pressed = 0; // button released early
 			}
-
 			if ( button_pressed == 0 ) {
 				adc_bottom = ADCVal[1] * 1.1; // dynamical reference for power down level
 			}
 		}
 
-		if (++clockcount > 9)
-			clockcount = 0;
-
 		if ( tx_on ) {
 			if ( tx_mode == SEND4FSK ) {
-				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
-				if ( mfsk_symbol == -1 ) {
-					// Reached the end of the current character, increment the current-byte pointer.
-					if ( current_mfsk_byte++ >= packet_length ) {
-						stop_sending();
-					} else {
-						// We've now advanced to the next byte, grab the first symbol from it.
-						mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
-					}
-				}
-				// Set the symbol!
-				if ( mfsk_symbol != -1 ) {
+				mfsk_symbol = get_mfsk();
+				if ( mfsk_symbol < 0 ) {
+					// Reached the end of the packet.
+					stop_sending();
+				} else {
 					radio_rw_register(0x73, (uint8_t)(FSK_SHIFT * mfsk_symbol), 1);
 				}
 			} else {
@@ -110,8 +118,6 @@ void TIM2_IRQHandler(void) {
 							tx_mode = SEND4FSK;
 					}
 				}
-
-
 			}
 		} else {
 			// TX is off
@@ -240,7 +246,7 @@ void send_mfsk_packet(){
 	uint8_t volts_scaled = (uint8_t)(51 * voltage / 100);
 
 	// Assemble a binary packet
-	BinaryPacket.PayloadID = BINARY_PAYLOAD_ID % 256;
+	BinaryPacket.PayloadID = LONG_BINARY;
 	BinaryPacket.Counter = send_count;
 	BinaryPacket.Hours = gpsData.hours;
 	BinaryPacket.Minutes = gpsData.minutes;
@@ -253,11 +259,13 @@ void send_mfsk_packet(){
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;
 
-	BinaryPacket.Checksum = (uint16_t)array_CRC16_checksum( (char*)&BinaryPacket,sizeof(BinaryPacket) - 2);
+	BinaryPacket.User1 = (uint16_t)0;
+	BinaryPacket.User2 = (uint16_t)0;
+	BinaryPacket.NameID = encode_callsign(callsign);
 
 	// Wrap a long packet around a legacy packet.
 	memcpy(buf_ssdv, &BinaryPacket, sizeof(BinaryPacket));
-	int32_t CRC32_checksum = gen_crc32(buf_ssdv, LONG_BINARY - 4);
+	uint32_t CRC32_checksum = crc32(buf_ssdv, LONG_BINARY - 4);
 	buf_ssdv[LONG_BINARY - 1] = (CRC32_checksum >> 0) & 0xff;
 	buf_ssdv[LONG_BINARY - 2] = (CRC32_checksum >> 8) & 0xff;
 	buf_ssdv[LONG_BINARY - 3] = (CRC32_checksum >>16) & 0xff;

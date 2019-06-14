@@ -214,7 +214,7 @@ static void *dtblcpy(ssdv_t *s, const void *src, size_t n)
 	return(r);
 }
 
-static uint32_t crc32(void *data, size_t length)
+uint32_t crc32(void *data, size_t length)
 {
 	uint32_t crc, x;
 	uint8_t i, *d;
@@ -233,7 +233,7 @@ static uint32_t crc32(void *data, size_t length)
 	return(crc ^ 0xFFFFFFFF);
 }
 
-static uint32_t encode_callsign(char *callsign)
+uint32_t encode_callsign(char *callsign)
 {
 	uint32_t x;
 	char *c;
