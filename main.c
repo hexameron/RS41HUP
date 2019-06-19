@@ -5,19 +5,6 @@
 
 #include "main.h"
 
-/**
- * GPS data processing
- */
-void USART1_IRQHandler(void) {
-	if ( USART_GetITStatus(USART1, USART_IT_RXNE) != RESET ) {
-		ublox_handle_incoming_byte( (uint8_t) USART_ReceiveData(USART1) );
-	} else if ( USART_GetITStatus(USART1, USART_IT_ORE) != RESET )    {
-		USART_ReceiveData(USART1);
-	} else {
-		USART_ReceiveData(USART1);
-	}
-}
-
 void start_sending() {
 	tx_mode = PREAMBLE;
 	radio_enable_tx();
@@ -164,7 +151,8 @@ int main(void) {
 	// NOTE - LEDs are inverted. (Reset to activate, Set to deactivate)
 	GPIO_SetBits(GPIOB, RED);
 	GPIO_ResetBits(GPIOB, GREEN);
-	// USART_SendData(USART3, 0xc);
+	for (int i=0; i<sizeof(CALLSIGN); i++)
+		usart3_send(CALLSIGN[i]);
 
 	radio_soft_reset();
 	// setting RTTY TX frequency
@@ -189,16 +177,16 @@ int main(void) {
 	tx_enable = 1;
 
 	// Why do we have to do this again?
-	spi_init();
+	// spi_init();
 	radio_set_tx_frequency(TRANSMIT_FREQUENCY);
 	radio_rw_register(0x71, 0x00, 1);
-	init_timer();
-	radio_enable_tx();
+	// init_timer();
+	// radio_enable_tx();
 
 	while ( 1 ) {
 		// Don't do anything until the previous transmission has finished.
 		if ( tx_enable && !tx_on ) {
-			if (1 & framecount++) {
+			if (3 & framecount++) {
 				send_ssdv_packet();
 			} else {
 				collect_telemetry_data();
@@ -254,14 +242,19 @@ void send_mfsk_packet(){
 	BinaryPacket.Latitude = ublox2float(last_lat);
 	BinaryPacket.Longitude = ublox2float(last_lon);
 	BinaryPacket.Altitude = (uint16_t)(last_alt);
-	BinaryPacket.Speed = 0; //(uint8_t)(9 * gpsData.speed_raw / 2500);
+	BinaryPacket.Speed = gpsData.bad_packets;
 	BinaryPacket.BattVoltage = volts_scaled;
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;
 
 	BinaryPacket.User1 = (uint16_t)0;
 	BinaryPacket.User2 = (uint16_t)0;
-	BinaryPacket.NameID = encode_callsign(callsign);
+
+	// Callsign is MSB
+	uint32_t name = encode_callsign(callsign);
+	name = (name >> 24) | ((name << 8) & (0xff << 16)) |
+		((name >> 8) & (0xff << 8)) | (name << 24);
+	BinaryPacket.NameID = name;
 
 	// Wrap a long packet around a legacy packet.
 	memcpy(buf_ssdv, &BinaryPacket, sizeof(BinaryPacket));

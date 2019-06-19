@@ -18,6 +18,7 @@
 #include "radio.h"
 #include "ublox.h"
 #include "delay.h"
+#include "usart3.h"
 #include "util.h"
 #include "horus_l2.h"
 

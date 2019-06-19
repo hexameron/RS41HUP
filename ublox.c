@@ -13,12 +13,22 @@ volatile uint8_t active = 0;
 volatile uint8_t ack_received = 0;
 volatile uint8_t nack_received = 0;
 
+void USART1_IRQHandler(void) {
+	if ( USART_GetITStatus(USART1, USART_IT_RXNE) != RESET ) {
+		ublox_handle_incoming_byte( (uint8_t) USART_ReceiveData(USART1) );
+	} else if ( USART_GetITStatus(USART1, USART_IT_ORE) != RESET )    {
+		USART_ReceiveData(USART1);
+	} else {
+		USART_ReceiveData(USART1);
+	}
+}
+
 void _sendSerialByte(uint8_t message) {
-  while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET) {
-  }
+  while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)
+	_delay_ms(1);
   USART_SendData(USART1, message);
-  while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET) {
-  }
+  while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)
+	_delay_ms(1);
 }
 
 void send_ublox(uint8_t msgClass, uint8_t msgId, uint8_t *payload, uint16_t payloadSize) {
@@ -82,23 +92,10 @@ void ublox_init(){
   uBloxPacket msgcfgrst = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x04, .payloadSize=sizeof(uBloxCFGRSTPayload)},
       .data.cfgrst = { .navBbrMask=0xffff, .resetMode=1, .reserved1 = 0}
   };
-  init_usart_gps(38400, 1);
-  _delay_ms(10);
-  send_ublox_packet(&msgcfgrst);
-  _delay_ms(800);
   init_usart_gps(9600, 1);
   _delay_ms(10);
   send_ublox_packet(&msgcfgrst);
   _delay_ms(800);
-
-  uBloxPacket msgcgprt = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x00, .payloadSize=sizeof(uBloxCFGPRTPayload)},
-      .data.cfgprt = {.portID=1, .reserved1=0, .txReady=0, .mode=0b00100011000000, .baudRate=38400,
-          .inProtoMask=1, .outProtoMask=1, .flags=0, .reserved2={0,0}}};
-  send_ublox_packet(&msgcgprt);
-  init_usart_gps(38400, 1);
-
-  _delay_ms(10);
-  // ubx_powersave();
 
   uBloxPacket msgcfgmsg = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x01, .payloadSize=sizeof(uBloxCFGMSGPayload)},
     .data.cfgmsg = {.msgClass=0x01, .msgID=0x02, .rate=1}};
@@ -124,8 +121,15 @@ void ublox_init(){
   do {
     send_ublox_packet(&msgcfgnav5);
   } while (!ublox_wait_for_ack());
-
 }
+/*
+  // CFG_PRT: turn off all GPS NMEA strings on the uart
+  static uint8_t setNMEAoff[] = { 	//  0xB5, 0x62, 0x06, 0x00, 0x14, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0xD0, 0x08, 0x00, 0x00, 0x80, 0x25,
+    0x00, 0x00, 0x07, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 }; // 0x14 bytes
+
+  send_ublox(6, 0, setNMEAoff, sizeof(setNMEAoff));
+*/
 
 void ublox_handle_incoming_byte(uint8_t data){
   static uint8_t sync = 0;

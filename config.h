@@ -11,11 +11,11 @@
 
 
 //************GLOBAL Settings*****************
-#define TRANSMIT_FREQUENCY  434412000
+#define TRANSMIT_FREQUENCY  434417000
 	// lowest frequency
 
 //************MFSK Binary Settings************
-#define CALLSIGN "4FSK"
+#define CALLSIGN "VC0706"
 	// put your SSDV callsign here, max. 6 characters uppercase
 
 // TX Power
@@ -32,12 +32,8 @@
 // 6 --> 15.0dBm
 // 7 --> 16.3dBm
 
-// WARNING: RS41s have been observed to lose transmitter PLL lock at low temperature, even with
-// stock insulation. This results in the transmitted signal drifting up the 70cm band with temperature.
-// Continuous transmission is recommended to keep the radio chip warm.
-//
 // Delay between transmitted packets at 1000 Hz
-#define OFF_TIME 5
+#define OFF_TIME 2
 #define TX_DELAY  (1000 * OFF_TIME)
 
 // 5 * 266 Hz = 1330 Hz tone spacing, for 5000 Hz Bandwidth

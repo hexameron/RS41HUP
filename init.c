@@ -55,6 +55,9 @@ void init_usart_gps(const uint32_t speed, const uint8_t enable_irq) {
 
 void init_usart_debug() {
   NVIC_DisableIRQ(USART3_IRQn);
+	USART_ITConfig(USART3, USART_IT_RXNE, DISABLE);
+	USART_ClearITPendingBit(USART3, USART_IT_RXNE);
+	USART_ClearITPendingBit(USART3, USART_IT_ORE);
   USART_Cmd(USART3, DISABLE);
 
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
@@ -64,8 +67,20 @@ void init_usart_debug() {
   USART_InitStructure.USART_Parity = USART_Parity_No;
   USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
   USART_InitStructure.USART_Mode = USART_Mode_Tx | USART_Mode_Rx;
+
+  NVIC_InitTypeDef NVIC_InitStructure;
+  NVIC_InitStructure.NVIC_IRQChannel = USART3_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 15;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+
   USART_Init(USART3, &USART_InitStructure);
   USART_Cmd(USART3, ENABLE);
+
+  USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);
+  NVIC_EnableIRQ(USART3_IRQn);
+ 
 }
 
 void NVIC_Conf()
