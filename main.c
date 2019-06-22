@@ -5,18 +5,12 @@
 
 #include "main.h"
 
-void start_sending() {
-	tx_mode = PREAMBLE;
-	radio_enable_tx();
-	tx_on = 1;	// From here the timer interrupt handles things.
-	tx_on_delay = TX_DELAY;	// leave a gap before next packet
-}
-
-void radio_blip() {
-	tx_mode = IDLE4FSK;
-	tx_on = 1;
-	tx_on_delay = NO_SSDV_DELAY;
-	radio_enable_tx();
+/* data or preamble only, short or long gap */
+void start_sending(int mode, int delay) {
+	tx_mode = mode;
+	tx_on_delay = delay;	// leave a gap before next packet
+	radio_enable_tx();	// Radio power on
+	tx_on = 1;		// From here the timer interrupt handles things.
 }
 
 /* Step through a byte, and return 4FSK symbols.*/
@@ -152,7 +146,7 @@ int main(void) {
 	GPIO_SetBits(GPIOB, RED);
 	GPIO_ResetBits(GPIOB, GREEN);
 	for (int i=0; i<sizeof(CALLSIGN); i++)
-		usart3_send(CALLSIGN[i]);
+		usart3_put(CALLSIGN[i]);
 
 	radio_soft_reset();
 	// setting RTTY TX frequency
@@ -186,7 +180,7 @@ int main(void) {
 	while ( 1 ) {
 		// Don't do anything until the previous transmission has finished.
 		if ( tx_enable && !tx_on ) {
-			if (3 & framecount++) {
+			if (7 & framecount++) {
 				send_ssdv_packet();
 			} else {
 				collect_telemetry_data();
@@ -247,8 +241,8 @@ void send_mfsk_packet(){
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;
 
-	BinaryPacket.User1 = (uint16_t)0;
-	BinaryPacket.User2 = (uint16_t)0;
+	BinaryPacket.User1 = usart3_wasout();
+	BinaryPacket.User2 = usart3_wasin();
 
 	// Callsign is MSB
 	uint32_t name = encode_callsign(callsign);
@@ -273,19 +267,19 @@ void send_mfsk_packet(){
 	// Data to transmit is the coded packet length, plus the 4-byte preamble.
 	packet_length = coded_len + 4;
 	tx_buffer = buf_mfsk;
-	start_sending();
+	start_sending(PREAMBLE, NOT_SSDV_DELAY);
 }
 
 void send_ssdv_packet() {
-	uint8_t status = fill_image_packet(buf_ssdv);
-	if (!status) {
-		radio_blip();
+	int status = fill_image_packet(buf_ssdv);
+	if (status < 0) {
+		start_sending(IDLE4FSK, NOT_SSDV_DELAY);
 		return;
 	}
 	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4, buf_ssdv + 1, SSDV_SIZE );
 	packet_length = coded_len + 4;
 	tx_buffer = buf_mfsk;
-	start_sending();
+	start_sending(PREAMBLE, TX_DELAY);
 }
 
 #ifdef  DEBUG

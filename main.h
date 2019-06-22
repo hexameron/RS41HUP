@@ -38,7 +38,7 @@ int voltage;
 int8_t si4032_temperature;
 GPSEntry gpsData;
 
-#define NO_SSDV_DELAY 1000		/* Half as long as a real packet */
+#define NOT_SSDV_DELAY 1000		/* Pause for  1 second */
 #define SSDV_SIZE  255			/* SSDV packet checksum length  */
 #define MAX_MFSK (2 * SSDV_SIZE)	/* (23,12) FEC  & preambles     */
 char buf_mfsk[MAX_MFSK];		/* FEC appended and interleaved */
@@ -94,6 +94,6 @@ struct TBinaryPacket BinaryPacket;
 void collect_telemetry_data();
 void send_mfsk_packet();
 void send_ssdv_packet();
-uint8_t fill_image_packet(uint8_t *pkt);
+int fill_image_packet(uint8_t *pkt);
 uint32_t encode_callsign(char *callsign);
 uint32_t crc32(void *data, size_t length);

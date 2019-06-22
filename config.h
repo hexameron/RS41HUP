@@ -33,7 +33,7 @@
 // 7 --> 16.3dBm
 
 // Delay between transmitted packets at 1000 Hz
-#define OFF_TIME 2
+#define OFF_TIME 1
 #define TX_DELAY  (1000 * OFF_TIME)
 
 // 5 * 266 Hz = 1330 Hz tone spacing, for 5000 Hz Bandwidth

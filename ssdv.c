@@ -1096,7 +1096,8 @@ char ssdv_enc_get_packet(ssdv_t *s)
 				s->packet_id++;
 				
 				/* Have we reached the end of the image data? */
-				if(r == SSDV_EOI) s->state = S_EOI;
+				if(r == SSDV_EOI)
+				       return(SSDV_EOI);//	s->state = S_EOI;
 				
 				return(SSDV_OK);
 			}

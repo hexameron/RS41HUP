@@ -89,6 +89,7 @@ void ubx_powersave(){
 }
 
 void ublox_init(){
+  /* reset ublox at 9600 baud */
   uBloxPacket msgcfgrst = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x04, .payloadSize=sizeof(uBloxCFGRSTPayload)},
       .data.cfgrst = { .navBbrMask=0xffff, .resetMode=1, .reserved1 = 0}
   };
@@ -96,6 +97,13 @@ void ublox_init(){
   _delay_ms(10);
   send_ublox_packet(&msgcfgrst);
   _delay_ms(800);
+
+  /* CFG_PRT: turn off all GPS NMEA strings on the uart, but keep 9600 baud rate */
+  uBloxPacket msgcgprt = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x00, .payloadSize=sizeof(uBloxCFGPRTPayload)},
+      .data.cfgprt = {.portID=1, .reserved1=0, .txReady=0, .mode=0b00100011000000, .baudRate=9600,
+          .inProtoMask=1, .outProtoMask=1, .flags=0, .reserved2={0,0}}};
+  send_ublox_packet(&msgcgprt);
+  _delay_ms(10);
 
   uBloxPacket msgcfgmsg = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x01, .payloadSize=sizeof(uBloxCFGMSGPayload)},
     .data.cfgmsg = {.msgClass=0x01, .msgID=0x02, .rate=1}};
@@ -122,14 +130,6 @@ void ublox_init(){
     send_ublox_packet(&msgcfgnav5);
   } while (!ublox_wait_for_ack());
 }
-/*
-  // CFG_PRT: turn off all GPS NMEA strings on the uart
-  static uint8_t setNMEAoff[] = { 	//  0xB5, 0x62, 0x06, 0x00, 0x14, 0x00,
-    0x01, 0x00, 0x00, 0x00, 0xD0, 0x08, 0x00, 0x00, 0x80, 0x25,
-    0x00, 0x00, 0x07, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 }; // 0x14 bytes
-
-  send_ublox(6, 0, setNMEAoff, sizeof(setNMEAoff));
-*/
 
 void ublox_handle_incoming_byte(uint8_t data){
   static uint8_t sync = 0;
