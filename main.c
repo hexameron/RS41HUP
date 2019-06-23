@@ -241,8 +241,8 @@ void send_mfsk_packet(){
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;
 
-	BinaryPacket.User1 = usart3_wasout();
-	BinaryPacket.User2 = usart3_wasin();
+	BinaryPacket.User1 = camera_bytes();
+	BinaryPacket.User2 = image_packets;
 
 	// Callsign is MSB
 	uint32_t name = encode_callsign(callsign);
@@ -280,6 +280,7 @@ void send_ssdv_packet() {
 	packet_length = coded_len + 4;
 	tx_buffer = buf_mfsk;
 	start_sending(PREAMBLE, TX_DELAY);
+	image_packets++;
 }
 
 #ifdef  DEBUG

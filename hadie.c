@@ -217,6 +217,9 @@ int verifyResponse( uint8_t command ) {
 }
 
 static int vc0706bytes = 0;
+uint16_t camera_bytes() {
+	return vc0706bytes;
+}
 
 void camera_reset()
 {

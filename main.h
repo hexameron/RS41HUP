@@ -61,6 +61,7 @@ volatile uint16_t button_pressed = 0;
 volatile uint8_t disable_armed = 0;
 static int tx_mode = PREAMBLE;
 static int framecount = 0;
+static uint16_t image_packets = 0;
 
 // Binary Packet Format
 // Note that we need to pack this to 1-byte alignment, hence the #pragma flags below
@@ -95,5 +96,6 @@ void collect_telemetry_data();
 void send_mfsk_packet();
 void send_ssdv_packet();
 int fill_image_packet(uint8_t *pkt);
+uint16_t camera_bytes();
 uint32_t encode_callsign(char *callsign);
 uint32_t crc32(void *data, size_t length);
