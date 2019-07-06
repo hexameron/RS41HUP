@@ -66,7 +66,7 @@
 #define INTERLEAVER
 #define SCRAMBLER
 
-static char uw[] = {'-','$','-'};
+static char uw[] = {'$','$'};
 
 /* Function Prototypes ------------------------------------------------*/
 

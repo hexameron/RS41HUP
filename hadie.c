@@ -308,11 +308,12 @@ int fill_image_packet(uint8_t *pkt)
 	}
 
 	if (setup == WAS_RESET) {
-		camera_vgaoff();	// lower power maybe
 		setup = NEEDS_SETUP;
+		return -1;		// allow more time for reset
 	}
 
 	if (setup == NEEDS_SETUP) {	// start new image
+		camera_vgaoff();	// lower power maybe
 		setup = IS_SETUP;
 		ssdv_enc_init(&ssdv, SSDV_TYPE_NOFEC, CALLSIGN, ++img_id, 1 + SSDV_QUALITY_NORMAL);
 		ssdv_enc_set_buffer(&ssdv, pkt);

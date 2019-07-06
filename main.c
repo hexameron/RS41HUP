@@ -202,8 +202,8 @@ void collect_telemetry_data() {
 	ublox_get_last_data(&gpsData);
 
 	if ( (gpsData.fix >= 3)&&(gpsData.fix < 5) ) {
-		if (!(send_count & 31))
-			ubx_powersave();
+		// if (!(send_count & 31))
+		//	ubx_powersave();
 
 		last_lat = gpsData.lat_raw;
 		last_lon = gpsData.lon_raw;
@@ -258,7 +258,7 @@ void send_mfsk_packet(){
 	buf_ssdv[LONG_BINARY - 3] = (CRC32_checksum >>16) & 0xff;
 	buf_ssdv[LONG_BINARY - 4] = (CRC32_checksum >>24) & 0xff;
 
-	// Why do we need a  Preamble?
+	//  Important: preamble is used extend sync word
 	sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b");
 
 	// Encode the packet, and write into the mfsk buffer.
@@ -276,6 +276,8 @@ void send_ssdv_packet() {
 		start_sending(IDLE4FSK, NOT_SSDV_DELAY);
 		return;
 	}
+
+	sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b");
 	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4, buf_ssdv + 1, SSDV_SIZE );
 	packet_length = coded_len + 4;
 	tx_buffer = buf_mfsk;
