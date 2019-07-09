@@ -18,7 +18,7 @@ Adafruit sell 2.54mm to 2mm patch leads (available from other resellers)
 * 2 - I2C_SDA (PB11)
 * 3 - I2C_SCL (PB10)
 * 4 - +VDD_MCU
-* 5 - MCU Switched 3.3V out to external device
+* 5 - 3.6V from boost converter
 * 6 - +V_Battery
 * 7 - RST
 * 8 - SWCLK (PA14)
@@ -35,7 +35,7 @@ RS41		STLink		UART
 2		N/C		RX
 3		N/C		TX
 4		POWER	1
-5		N/C		(3.3v)
+5		N/C		(3.6v)
 6		N/C
 7		RESET	15
 8		CLOCK	9
@@ -44,4 +44,6 @@ RS41		STLink		UART
 ```
 All other pins on STLink header not connected.  
 When using the Adafruit patch leads it is more convenient to use
-pin 10 as GND, since the 2mm ends are coupled as pairs.
+pin 10 as GND, since the 2mm ends are coupled as pairs. It is safe
+to supply 3.3v on the programming header, but this allows power to
+pass back through the CPU Regulator, and may not be the best idea.

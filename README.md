@@ -53,15 +53,10 @@ Configuration settings are located in [config.h](./config.h). Modify as appropri
  * 06.06.2017 - APRS code fix, some code cleanup
  * June 2017 - starting with Linux support, making configuration more flexible by DF8OE
  * March 2018 - Addition of 4FSK binary mode support by Mark VK5QI
- * Late 2018 - Addition of 4FSK Olivia and Contestia 1000Hz modes
+ * Mid 2019  -  Faster 4FSK 1000Hz mode for SSDV with Uart camera support
 
-# Warning
- Some RS41s have been observed to lose transmitter PLL lock with internal chip temperatures below zero centigrade.
-Increasing Tx power and adding insulation can help. The RFM22b had a similar problem during the "coldest" parts
-of HAB flights, and that issue was mitigated by regularly resetting the chip.
 
 # TODO
- * Resolve issue with loss of frequency lock at low temperature
  * Temperature and moisture sensor support (temperature should be the easiest to get going first...)
  * Implementing protocol for using external devices on extension header
  * Configuration via extension header (serial connection) without need for reflashing firmware
