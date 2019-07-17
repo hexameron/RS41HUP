@@ -189,7 +189,9 @@ void sendCommand( uint8_t cmd, uint8_t args[], uint8_t argn ) {
 }
 
 
-/* Copy  bytes from the circular buffer into a local buffer */
+/* Copy  bytes from the circular buffer into a local buffer	*
+ *  - we can`t send any more camera commands if SSDV still	*
+ *	has unread data in the buffer !!!			*/
 uint8_t readResponse( uint8_t numbytes, uint8_t timeout1ms ) {
 	uint8_t i, bufferLen;
 
@@ -241,7 +243,6 @@ void camera_photo(void) {
 	printf("\nTaking Picture.\n");
 	takePicture();
 	vc0706bytes = frameLength();	// Assume this is a multiple of 4 bytes
-	vc0706bytes += 4;		// Add 4 bytes for padding
 	printf("%d bytes to read\n", vc0706bytes);
 }
 
@@ -252,15 +253,15 @@ void camera_EOI(void) {		// flush input and start camera
 //	usleep(200*1000);
 }
 
-#define LOW_DISCARD 4
-/* readPicture() fills buffer: need to reset after this */
+/* ssdv uses camera  buffer: no more camera commands until all data has been read */
 uint8_t camera_read(uint8_t size) {
 	if (vc0706bytes < size)
 		size = vc0706bytes;
-	vc0706bytes -= size;
+	if (size == 0)
+		return 0;
 	size = readPicture( size );
-	if (vc0706bytes < LOW_DISCARD)
-		camera_EOI();
+	vc0706bytes -= size;
+	// if (vc0706bytes == 0) camera_EOI();
 	
 	return size;
 }
@@ -289,12 +290,14 @@ void camera_close(void) {
 #define WAS_RESET	1
 #define NEEDS_SETUP	2
 #define IS_SETUP	3
+static uint8_t reset_count = 0;
+uint8_t get_reset_count(void) {return reset_count;}
+
 int fill_image_packet(uint8_t *pkt)
 {
 	static int setup = NEEDS_RESET;
 	static uint8_t img_id = 0;
 	static ssdv_t ssdv;
-	static int reset_count = 0;
 	size_t errcode;
 
 	/* multiple resets suggest low battery, or low temperature failure */
@@ -309,11 +312,11 @@ int fill_image_packet(uint8_t *pkt)
 
 	if (setup == WAS_RESET) {
 		setup = NEEDS_SETUP;
+		camera_vgaoff();	// lower power maybe
 		return -1;		// allow more time for reset
 	}
 
 	if (setup == NEEDS_SETUP) {	// start new image
-		camera_vgaoff();	// lower power maybe
 		setup = IS_SETUP;
 		ssdv_enc_init(&ssdv, SSDV_TYPE_NOFEC, CALLSIGN, ++img_id, 1 + SSDV_QUALITY_NORMAL);
 		ssdv_enc_set_buffer(&ssdv, pkt);
@@ -332,13 +335,13 @@ int fill_image_packet(uint8_t *pkt)
 		ssdv_enc_feed(&ssdv, camerabuff, len);
 	}
 
-	if(errcode == SSDV_OK) {
-		return img_id;	// Wrote a packet
+	if(errcode == SSDV_OK) {	// Not last packet
+		return img_id;
 	}
 
 	if(errcode == SSDV_EOI) {	// Last packet
 		printf("SSDV End of image.\n");
-		camera_EOI();
+		camera_EOI();		// Restart camera for next photo
 		setup = NEEDS_SETUP;
 		return img_id;
 	}

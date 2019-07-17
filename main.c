@@ -236,7 +236,7 @@ void send_mfsk_packet(){
 	BinaryPacket.Latitude = ublox2float(last_lat);
 	BinaryPacket.Longitude = ublox2float(last_lon);
 	BinaryPacket.Altitude = (uint16_t)(last_alt);
-	BinaryPacket.Speed = gpsData.bad_packets;
+	BinaryPacket.Speed = get_reset_count();
 	BinaryPacket.BattVoltage = volts_scaled;
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;

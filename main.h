@@ -96,6 +96,7 @@ void collect_telemetry_data();
 void send_mfsk_packet();
 void send_ssdv_packet();
 int fill_image_packet(uint8_t *pkt);
+uint8_t  get_reset_count();
 uint16_t camera_bytes();
 uint32_t encode_callsign(char *callsign);
 uint32_t crc32(void *data, size_t length);
