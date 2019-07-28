@@ -40,7 +40,7 @@ GPSEntry gpsData;
 
 #define NOT_SSDV_DELAY 1000		/* Pause for  1 second */
 #define SSDV_SIZE  255			/* SSDV packet checksum length  */
-#define MAX_MFSK (2 * SSDV_SIZE)	/* (23,12) FEC  & preambles     */
+#define MAX_MFSK (6+258+65 + 8)		/* (258,65) FEC  & preambles    */
 char buf_mfsk[MAX_MFSK];		/* FEC appended and interleaved */
 uint8_t buf_ssdv[MAX_MFSK];		/*  Temporary packet storage */
 static char callsign[8] = {CALLSIGN};

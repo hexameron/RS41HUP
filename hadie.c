@@ -318,7 +318,7 @@ int fill_image_packet(uint8_t *pkt)
 
 	if (setup == NEEDS_SETUP) {	// start new image
 		setup = IS_SETUP;
-		ssdv_enc_init(&ssdv, SSDV_TYPE_NOFEC, CALLSIGN, ++img_id, 1 + SSDV_QUALITY_NORMAL);
+		ssdv_enc_init(&ssdv, SSDV_TYPE_NOFEC, CALLSIGN, ++img_id, SSDV_QUALITY_NORMAL);
 		ssdv_enc_set_buffer(&ssdv, pkt);
 	}
 	

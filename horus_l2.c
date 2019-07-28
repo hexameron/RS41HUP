@@ -79,6 +79,46 @@ void scramble(unsigned char *inout, int nbytes);
 
 /* Functions ----------------------------------------------------------*/
 
+/* LDPC Encoder, using a 'RA' encoder written by Bill Cowley VK5DSP in March 2016. */
+#define NIBITS 2064
+#define NPBITS  516
+#define NWT      12
+#define NIBYTES 258
+#define NPBYTES  65
+
+#include "hrow2064.h"
+
+int horus_ldpc_encode(uint8_t *ibytes, uint8_t *obytes)
+{
+	unsigned int p, i, tmp;
+	unsigned par = 0;
+	uint8_t *pbytes = &obytes[NIBYTES];
+
+	memcpy(obytes, ibytes, NIBYTES);
+	memset(pbytes, 0, NPBYTES);
+
+	for(p = 0; p < NPBITS; p++)
+	{
+		for(i = 0; i < NWT; i++)
+		{
+			tmp  = _hrows[p * NWT + i];
+			par += ibytes[tmp >> 3] >> (7 - (tmp & 7));
+		}
+
+		par &= 1;
+
+		pbytes[p >> 3] |= par << (7 - (p & 7));
+	}
+
+	/* reuse input buffer for temporary storage */
+	interleave(obytes, ibytes, NIBYTES + NPBYTES, 0);
+	scramble(obytes, NIBYTES + NPBYTES);
+
+	return NIBYTES + NPBYTES;
+}
+/*----- End of LDPC encoder for SSDV packets ------*/
+
+
 /*
    We are using a Golay (23,12) code which has a codeword 23 bits
    long.  The tx packet format is:

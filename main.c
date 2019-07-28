@@ -91,7 +91,7 @@ void TIM2_IRQHandler(void) {
 					mfsk_symbol = (mfsk_symbol + 1) & 0x03;
 					radio_rw_register(0x73, (uint8_t)(FSK_SHIFT * mfsk_symbol), 1);
 					if ( !preamble_byte-- ) {
-						preamble_byte = 12;
+						preamble_byte = 8;
 						// switch mode
 						if (tx_mode == IDLE4FSK)
 							stop_sending();
@@ -277,9 +277,10 @@ void send_ssdv_packet() {
 		return;
 	}
 
-	sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b");
-	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4, buf_ssdv + 1, SSDV_SIZE );
-	packet_length = coded_len + 4;
+	// Preamble + sync word
+	sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b$$");
+	int coded_len = horus_ldpc_encode( buf_ssdv + 1, (uint8_t *)buf_mfsk + 6 );
+	packet_length = coded_len + 6;
 	tx_buffer = buf_mfsk;
 	start_sending(PREAMBLE, TX_DELAY);
 	image_packets++;
