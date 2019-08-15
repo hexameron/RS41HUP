@@ -141,7 +141,7 @@ void ublox_handle_incoming_byte(uint8_t data){
     }
   } else {
     ((uint8_t *)incoming_packet)[buffer_pos] = data;
-    if ((buffer_pos >= sizeof(uBloxHeader)-1) && (buffer_pos-1 == (incoming_packet->header.payloadSize + sizeof(uBloxHeader) + sizeof(uBloxChecksum)))){
+    if ((buffer_pos >= sizeof(uBloxHeader)-1) && (buffer_pos == (incoming_packet->header.payloadSize + sizeof(uBloxHeader) + sizeof(uBloxChecksum) - 1))){
       ublox_handle_packet((uBloxPacket *) incoming_packet);
       buffer_pos = 0;
       sync = 0;
