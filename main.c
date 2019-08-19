@@ -202,8 +202,8 @@ void collect_telemetry_data() {
 	ublox_get_last_data(&gpsData);
 
 	if ( (gpsData.fix >= 3)&&(gpsData.fix < 5) ) {
-		// if (!(send_count & 31))
-		//	ubx_powersave();
+		if (!(send_count & 31))
+			ubx_powersave();
 
 		last_lat = gpsData.lat_raw;
 		last_lon = gpsData.lon_raw;
@@ -241,8 +241,8 @@ void send_mfsk_packet(){
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;
 
-	BinaryPacket.User1 = camera_bytes();
-	BinaryPacket.User2 = image_packets;
+	BinaryPacket.User2 = gpsData.t_error + 1;
+	BinaryPacket.User1 = gpsData.bad_packets;
 
 	// Callsign is MSB
 	uint32_t name = encode_callsign(callsign);

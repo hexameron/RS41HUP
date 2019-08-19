@@ -77,8 +77,10 @@ uBloxChecksum ublox_calc_checksum(const uint8_t msgClass, const uint8_t msgId, c
 void ublox_get_last_data(GPSEntry * gpsEntry){
   __disable_irq();
   memcpy(gpsEntry, &currentGPSData, sizeof(GPSEntry));
+  currentGPSData.bad_packets = 0;
   __enable_irq();
 }
+
 
 void ubx_powersave(){
   uBloxPacket msgcfgrxm = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x11, .payloadSize=sizeof(uBloxCFGRXMPayload)},
@@ -98,12 +100,12 @@ void ublox_init(){
   send_ublox_packet(&msgcfgrst);
   _delay_ms(800);
 
-  /* CFG_PRT: turn off all GPS NMEA strings on the uart, but keep 9600 baud rate */
+  /* CFG_PRT: turn off all GPS NMEA strings on the uart, keep 9600 baud rate */
   uBloxPacket msgcgprt = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x00, .payloadSize=sizeof(uBloxCFGPRTPayload)},
       .data.cfgprt = {.portID=1, .reserved1=0, .txReady=0, .mode=0b00100011000000, .baudRate=9600,
           .inProtoMask=1, .outProtoMask=1, .flags=0, .reserved2={0,0}}};
   send_ublox_packet(&msgcgprt);
-  _delay_ms(10);
+  ublox_wait_for_ack();
 
   uBloxPacket msgcfgmsg = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x01, .payloadSize=sizeof(uBloxCFGMSGPayload)},
     .data.cfgmsg = {.msgClass=0x01, .msgID=0x02, .rate=1}};
@@ -167,7 +169,7 @@ void ublox_handle_packet(uBloxPacket *pkt) {
   uBloxChecksum cksum = ublox_calc_checksum(pkt->header.messageClass, pkt->header.messageId, (const uint8_t *) &pkt->data, pkt->header.payloadSize);
   uBloxChecksum *checksum = (uBloxChecksum *)(((uint8_t*)&pkt->data) + pkt->header.payloadSize);
   if (cksum.ck_a != checksum->ck_a || cksum.ck_b != checksum->ck_b) {
-    currentGPSData.bad_packets += 1;
+    currentGPSData.bad_packets++;
   } else {
 
     if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x07){
@@ -181,7 +183,7 @@ void ublox_handle_packet(uBloxPacket *pkt) {
       currentGPSData.seconds = pkt->data.navpvt.sec;
       currentGPSData.sats_raw = pkt->data.navpvt.numSV;
       currentGPSData.speed_raw = pkt->data.navpvt.gSpeed;
-
+      currentGPSData.t_error = pkt->data.navpvt.tAcc;
     } else if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x02){
       currentGPSData.ok_packets += 1;
       currentGPSData.lat_raw = pkt->data.navposllh.lat;
@@ -194,11 +196,14 @@ void ublox_handle_packet(uBloxPacket *pkt) {
       currentGPSData.hours = pkt->data.navtimeutc.hour;
       currentGPSData.minutes = pkt->data.navtimeutc.min;
       currentGPSData.seconds = pkt->data.navtimeutc.sec;
+      currentGPSData.t_error = pkt->data.navtimeutc.tAcc;
     } else if (pkt->header.messageClass == 0x05 && pkt->header.messageId == 0x01){
       ack_received = 1;
     } else if (pkt->header.messageClass == 0x05 && pkt->header.messageId == 0x00){
       nack_received = 1;
-    }
+    } else
+	    currentGPSData.bad_packets = (pkt->header.messageClass << 8) + pkt->header.messageClass;
+
   }
 
 }

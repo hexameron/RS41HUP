@@ -18,6 +18,7 @@ typedef struct {
   uint8_t fix;
   uint16_t ok_packets;
   uint16_t bad_packets;
+  uint32_t t_error;
 } GPSEntry;
 
 typedef struct  __attribute__((packed)){
