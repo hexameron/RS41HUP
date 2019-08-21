@@ -88,13 +88,14 @@ void scramble(unsigned char *inout, int nbytes);
 
 #include "hrow2064.h"
 
-int horus_ldpc_encode(uint8_t *ibytes, uint8_t *obytes)
+// Double buffer - calculate the parity bits first
+// (uses a 6k word lookup table of offsets and shifts)
+void horus_ldpc_encode(uint8_t *ibytes)
 {
 	unsigned int p, i, tmp;
 	unsigned par = 0;
-	uint8_t *pbytes = &obytes[NIBYTES];
+	uint8_t *pbytes = &ibytes[NIBYTES];
 
-	memcpy(obytes, ibytes, NIBYTES);
 	memset(pbytes, 0, NPBYTES);
 
 	for(p = 0; p < NPBITS; p++)
@@ -109,8 +110,13 @@ int horus_ldpc_encode(uint8_t *ibytes, uint8_t *obytes)
 
 		pbytes[p >> 3] |= par << (7 - (p & 7));
 	}
+}
 
-	/* reuse input buffer for temporary storage */
+// Double buffer - scramble and interleave later
+// (interleaver corrupts input buffer)
+int horus_ldpc_scramble(uint8_t *ibytes, uint8_t *obytes)
+{
+	memcpy(obytes, ibytes, NIBYTES + NPBYTES);
 	interleave(obytes, ibytes, NIBYTES + NPBYTES, 0);
 	scramble(obytes, NIBYTES + NPBYTES);
 

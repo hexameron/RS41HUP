@@ -9,7 +9,8 @@
 #ifndef __HORUS_L2__
 #define __HORUS_L2__
 
-int horus_ldpc_encode(uint8_t *ibytes, uint8_t *obytes);
+void horus_ldpc_encode(uint8_t *ibytes);
+int horus_ldpc_scramble(uint8_t *ibytes, uint8_t *obytes);
 
 int horus_l2_get_num_tx_data_bytes(int num_payload_data_bytes);
 

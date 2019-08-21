@@ -270,20 +270,24 @@ void send_mfsk_packet(){
 	start_sending(PREAMBLE, NOT_SSDV_DELAY);
 }
 
+// Double buffered - send last packet AND calculate next one
 void send_ssdv_packet() {
-	int status = fill_image_packet(buf_ssdv);
+	static int status = -1;
 	if (status < 0) {
 		start_sending(IDLE4FSK, NOT_SSDV_DELAY);
-		return;
+	} else {
+		sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b$$"); // telemetry packet already did this
+		int coded_len = horus_ldpc_scramble( buf_ssdv + 1, (uint8_t *)buf_mfsk + 6 );
+		packet_length = coded_len + 6;
+		tx_buffer = buf_mfsk;
+		start_sending(PREAMBLE, TX_DELAY);
+		image_packets++;
 	}
 
-	// Preamble + sync word
-	sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b$$");
-	int coded_len = horus_ldpc_encode( buf_ssdv + 1, (uint8_t *)buf_mfsk + 6 );
-	packet_length = coded_len + 6;
-	tx_buffer = buf_mfsk;
-	start_sending(PREAMBLE, TX_DELAY);
-	image_packets++;
+	status = fill_image_packet(buf_ssdv);
+	if (status < 0)
+		return;
+	horus_ldpc_encode( buf_ssdv + 1);
 }
 
 #ifdef  DEBUG
