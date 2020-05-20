@@ -18,7 +18,6 @@ void USART1_IRQHandler(void) {
 	}
 }
 
-//TODO: Do not enable Tx if the "disable" button was pushed
 void start_sending() {
 	radio_enable_tx();
 	tx_on = 1; // From here the timer interrupt handles things.
@@ -33,6 +32,19 @@ void stop_sending() {
 	radio_disable_tx();	// no transmit powersave
 }
 
+static inline int send_4fsk(char current_char) {
+	static uint8_t nibble = 0;
+	int _c = current_char;
+
+	if (nibble == 4){
+		nibble = 0;
+		return -1;
+	} else {
+		_c = _c >> (6  - 2 * nibble++);
+		return _c & 3;
+	}
+}
+
 //
 // Symbol Timing Interrupt
 // In here symbol transmission occurs.
@@ -45,8 +57,6 @@ void TIM2_IRQHandler(void) {
 	if ( TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET ) {
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
 
-		// BAD IDEA unless testing
-		// Code will be removed by compiler if flag is unset
 		if ( ALLOW_DISABLE_BY_BUTTON ) {
 			if ( ADCVal[1] > adc_bottom ) {
 				button_pressed++;
@@ -71,29 +81,19 @@ void TIM2_IRQHandler(void) {
 
 
 		if ( tx_on ) {
-			// RTTY Symbol selection logic.
-			if (current_mode == RTTY) {
-				send_rtty_status = send_rtty( (char *) tx_buffer);
-
-				if ( send_rtty_status == rttyEnd ) {
-					if ( *(++tx_buffer) == 0 )
-						stop_sending();
-				} else if ( send_rtty_status == rttyOne ) {
-					radio_rw_register(0x73, RTTY_DEVIATION, 1);
-				} else if ( send_rtty_status == rttyZero ) {
-					radio_rw_register(0x73, 0x00, 1);
-				}
-			} else if ( current_mode == SEND4FSK ) {
+			// Symbol selection logic.
+			if ( (current_mode == DO_HORUS) || (current_mode == DO_LDPC)) {
 				// 4FSK Symbol Selection Logic
-				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
+				mfsk_symbol = send_4fsk(tx_buffer[current_mfsk_byte]);
 
 				if ( mfsk_symbol == -1 ) {
 					// Reached the end of the current character, increment the current-byte pointer.
 					if ( current_mfsk_byte++ >= packet_length ) {
 						stop_sending();
+						current_mode++;
+						// DO_LDPC -> SEND_HORUS, or DO_HORUS -> STARTUP
 					} else {
-						// We've now advanced to the next byte, grab the first symbol from it.
-						mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
+						mfsk_symbol = send_4fsk(tx_buffer[current_mfsk_byte]);
 					}
 				}
 				// Set the symbol!
@@ -102,18 +102,14 @@ void TIM2_IRQHandler(void) {
 				}
 			} else {
 				// Preamble for horus_demod to lock on:
-				// Transmit continuous MFSK symbols
-				if (current_mode == HORUS) {
-					mfsk_symbol = (mfsk_symbol + 1) & 0x03;
-					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
-					if ( !preamble_byte-- ) {
-						preamble_byte = 20;
-						// start sending data
-						current_mode = SEND4FSK;
-					}
+				// may be in mode LDPC or BINARY
+				mfsk_symbol = (mfsk_symbol + 1) & 0x03;
+				radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
+				if ( !preamble_byte-- ) {
+					preamble_byte = PREAMBLE_LENGTH;
+					current_mode++;
+					// SEND_LDPC -> DO_LDPC, or SEND_HORUS -> DO_HORUS
 				}
-
-
 			}
 		} else {
 			// TX is off
@@ -146,83 +142,12 @@ void TIM2_IRQHandler(void) {
 	}
 }
 
-int main(void) {
-#ifdef DEBUG
-	debug();
-#endif
-	RCC_Conf();
-	NVIC_Conf();
-	init_port();
-	init_timer();
-	delay_init();
-	ublox_init();
-
-	// NOTE - LEDs are inverted. (Reset to activate, Set to deactivate)
-	GPIO_SetBits(GPIOB, RED);
-	GPIO_ResetBits(GPIOB, GREEN);
-	for (int i=0; i<5; i++)
-		USART_SendData(USART3, CALLSIGN[i]);
-
-	radio_soft_reset();
-	// setting RTTY TX frequency
-	radio_set_tx_frequency(TRANSMIT_FREQUENCY);
-
-	// setting TX power
-	radio_rw_register(0x6D, 00 | (TX_POWER & 0x0007), 1);
-
-	// initial RTTY modulation
-	radio_rw_register(0x71, 0x00, 1);
-
-	// Temperature Value Offset
-	radio_rw_register(0x13, 0x00, 1);
-
-	// Temperature Sensor Calibration
-	radio_rw_register(0x12, 0x20, 1);
-
-	// ADC configuration
-	radio_rw_register(0x0f, 0x80, 1);
-	tx_buffer = buf_rtty;
-	tx_on = 0;
-	tx_enable = 1;
-
-	// Why do we have to do this again?
-	spi_init();
-	radio_set_tx_frequency(TRANSMIT_FREQUENCY);
-	radio_rw_register(0x71, 0x00, 1);
-	init_timer();
-	radio_enable_tx();
-
-	while ( 1 ) {
-		// Don't do anything until the previous transmission has finished.
-		if ( tx_on == 0 && tx_enable ) {
-			if ( current_mode == STARTUP ) {
-				current_mode = RTTY;
-		#ifdef USE_RTTY
-				collect_telemetry_data();
-				send_rtty_packet();
-		#endif
-			} else if ( current_mode == RTTY ) {
-				current_mode = HORUS;
-		#ifdef USE_HORUS
-				collect_telemetry_data();
-				send_mfsk_packet();
-		#endif
-			} else {
-				current_mode = STARTUP;
-			}
-		} else {
-			NVIC_SystemLPConfig(NVIC_LP_SEVONPEND, DISABLE);
-			__WFI();
-		}
-	}
-}
-
 int32_t last_lat = 0, last_lon = 0, last_alt = 0;
 void collect_telemetry_data() {
 	// Assemble and process the telemetry data we need to construct our RTTY and MFSK packets.
 	send_count++;
 	si4032_temperature = radio_read_temperature();
-	voltage = ADCVal[0] * 600 / 4096;
+	voltage = ADCVal[0] * 600 / 4096; // scaled to 0.01 V
 	ublox_get_last_data(&gpsData);
 
 	if ( (gpsData.fix >= 3)&&(gpsData.fix < 5) ) {
@@ -246,51 +171,9 @@ void collect_telemetry_data() {
 	}
 }
 
-
-uint8_t fill_string() {
-	// Write a UKHAS format string into the RTTY buffer.
-
-	// Convert raw lat/lon values into degrees and decimal degree values.
-	uint8_t lat_d = (uint8_t) abs(last_lat / 10000000);
-	uint32_t lat_fl = (uint32_t) abs(abs(last_lat / 100) - lat_d * 100000);
-	uint8_t lon_d = (uint8_t) abs(last_lon / 10000000);
-	uint32_t lon_fl = (uint32_t) abs(abs(last_lon / 100) - lon_d * 100000);
-
-	// RTTY Sentence uses same format as Horus Binary, so can use same callsign.
-	sprintf(buf_mfsk, "%s,%d,%02u%02u%02u,%s%d.%05ld,%s%d.%05ld,%d,%d,%d,%d,%d.%02d",
-			callsign,
-			send_count,
-			gpsData.hours, gpsData.minutes, gpsData.seconds,
-			last_lat < 0 ? "-" : "", lat_d, lat_fl,
-			last_lon < 0 ? "-" : "", lon_d, lon_fl,
-			(uint16_t)last_alt,
-			gpsData.bad_packets, // speed
-			gpsData.sats_raw,
-			si4032_temperature,
-			voltage / 100, voltage - 100 * (voltage/ 100)
-			);
-
-	// Calculate and append CRC16 checksum to end of sentence.
-	CRC_rtty = string_CRC16_checksum(buf_mfsk);
-	return snprintf(buf_rtty, MAX_RTTY, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
-}
-
-void send_rtty_packet() {
-	// Write a string into the tx buffer, and start RTTY transmission.
-	fill_string();
-	tx_buffer = buf_rtty;
-	start_bits = RTTY_PRE_START_BITS;
-	start_sending();
-}
-
-
-void send_mfsk_packet(){
-	// Generate a MFSK Binary Packet
-
-	uint8_t volts_scaled = (uint8_t)(51 * voltage / 100);
-
-	// Assemble a binary packet
+void send_binary() {
 	struct TBinaryPacket BinaryPacket;
+
 	BinaryPacket.PayloadID = BINARY_PAYLOAD_ID % 256;
 	BinaryPacket.Counter = send_count;
 	BinaryPacket.Hours = gpsData.hours;
@@ -300,46 +183,135 @@ void send_mfsk_packet(){
 	BinaryPacket.Longitude = ublox2float(last_lon);
 	BinaryPacket.Altitude = (uint16_t)(last_alt);
 	BinaryPacket.Speed = gpsData.bad_packets; //(uint8_t)(9 * gpsData.speed_raw / 2500);
-	BinaryPacket.BattVoltage = volts_scaled;
+	BinaryPacket.BattVoltage = (uint8_t)(51 * voltage / 100);
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;
 
 	BinaryPacket.Checksum = (uint16_t)array_CRC16_checksum( (char*)&BinaryPacket,sizeof(BinaryPacket) - 2);
 
-	// Write Preamble characters into mfsk buffer.
-	sprintf(buf_mfsk, "\x1b\x1b\x1b\x1b");
-	// Encode the packet, and write into the mfsk buffer.
-	int coded_len = horus_l2_encode_tx_packet( (unsigned char*)buf_mfsk + 4,(unsigned char*)&BinaryPacket,sizeof(BinaryPacket) );
-
-	// Data to transmit is the coded packet length, plus the 4-byte preamble.
-	packet_length = coded_len + 4;
-	tx_buffer = buf_mfsk;
+	packet_length = horus_l2_encode_tx_packet( (unsigned char*)buff_mfsk,(unsigned char*)&BinaryPacket,sizeof(BinaryPacket) );
+	tx_buffer = buff_mfsk;
 	start_sending();
 }
 
-#if 0
-void send_contest_packet(){
-	uint8_t rtty_len;
-	rtty_len = fill_string();
+void send_ldpc() {
+	int32_t user, sats, temp;
+	struct SBinaryPacket FSK;
 
-	// Convert rtty string into 4fsk symbols
-	packet_length = 0;
-	memset(buf_mfsk, 0, MAX_MFSK);
-	for (int index = 0; index < rtty_len; index +=2) {
-		// convert two chars at a time
-		if ( current_mode == OLIVIA ) {
-			packet_length += olivia_block( &buf_rtty[index],  &buf_mfsk[packet_length] );
+	FSK.PayloadID = BINARY_PAYLOAD_ID % 256;
+	FSK.Counter = send_count;
+
+	FSK.BiSeconds = 30 * 60 * gpsData.hours
+			+ 30 * gpsData.minutes
+			+ (gpsData.seconds >> 1);
+
+	FSK.Longitude[0] = 0xFF & (last_lon >> 8);
+	FSK.Longitude[1] = 0xFF & (last_lon >>16);
+	FSK.Longitude[2] = 0xFF & (last_lon >>24);
+
+	FSK.Latitude[0] = 0xFF & (last_lat >> 8);
+	FSK.Latitude[1] = 0xFF & (last_lat >>16);
+	FSK.Latitude[2] = 0xFF & (last_lat >>24);
+
+	FSK.Altitude = (uint16_t)last_alt;
+	FSK.Voltage = (uint8_t)(51 * voltage / 100);
+
+	// Legacy 5 bit Payload ID
+	user = BINARY_PAYLOAD_ID & 0x1f;
+	// 5 bits offset 0
+
+	// Six bit temperature: +31C to -32C in 1C steps
+	temp = si4032_temperature;
+	if (temp > 31) temp = 31;
+	if (temp < -32) temp = -32;
+	user = (uint8_t)(temp << 2);
+
+	// rough guide to GPS quality, (0,4,8,12 sats)
+	sats = gpsData.sats_raw >> 2;
+	if (sats < 0) sats = 0;
+	if (sats > 3) sats = 3;
+	user |= sats;
+	FSK.User = user;
+
+	array2gray((uint8_t*)&FSK, sizeof(FSK) - 2);
+	FSK.Checksum = (uint16_t)array_CRC16_checksum((char*)&FSK, sizeof(FSK) - 2);
+	packet_length = ldpc_encode_packet((uint8_t*)buff_mfsk, (uint8_t*)&FSK);
+	tx_buffer = buff_mfsk;
+	start_sending();
+}
+
+/*---------------------------------------------------------------------------*/
+
+int main(void) {
+	RCC_Conf();
+	NVIC_Conf();
+	init_port();
+	init_timer();
+	delay_init();
+	ublox_init();
+
+	// NOTE - LEDs are inverted. (Reset to activate, Set to deactivate)
+	GPIO_SetBits(GPIOB, RED);
+	GPIO_ResetBits(GPIOB, GREEN);
+
+	radio_soft_reset();
+	// setting RTTY TX frequency
+	radio_set_tx_frequency(TRANSMIT_FREQUENCY);
+
+	// setting TX power
+	radio_rw_register(0x6D, 00 | (TX_POWER & 0x0007), 1);
+
+	// initial RTTY modulation
+	radio_rw_register(0x71, 0x00, 1);
+
+	// Temperature Value Offset
+	radio_rw_register(0x13, 0x00, 1);
+
+	// Temperature Sensor Calibration
+	radio_rw_register(0x12, 0x20, 1);
+
+	// ADC configuration
+	radio_rw_register(0x0f, 0x80, 1);
+	tx_buffer = buff_mfsk;
+	tx_on = 0;
+	tx_enable = 1;
+
+	// Why do we have to do this again?
+	spi_init();
+	radio_set_tx_frequency(TRANSMIT_FREQUENCY);
+	radio_rw_register(0x71, 0x00, 1);
+	init_timer();
+	radio_enable_tx();
+
+	while ( 1 ) {
+		// Don't do anything until the previous transmission has finished.
+		if ( tx_on == 0 && tx_enable ) {
+			if ( current_mode == SEND_LDPC )
+			{
+		#ifdef USE_LDPC
+				collect_telemetry_data();
+				send_ldpc();
+		#else
+				current_mode = SEND_HORUS;
+		#endif
+			}
+			else if ( current_mode == SEND_HORUS )
+			{
+		#ifdef USE_HORUS
+				collect_telemetry_data();
+				send_binary();
+		#else
+				current_mode = SEND_LDPC;
+		#endif
+			}
+			else	current_mode = SEND_LDPC;
+
 		} else {
-			packet_length += contestia_block( &buf_rtty[index],  &buf_mfsk[packet_length] );
+			NVIC_SystemLPConfig(NVIC_LP_SEVONPEND, DISABLE);
+			__WFI();
 		}
 	}
-	tx_buffer = buf_mfsk;
-	start_sending();
 }
-#endif
 
-#ifdef  DEBUG
-void assert_failed(uint8_t* file, uint32_t line){
-	while ( 1 ) ;
-}
-#endif
+/*---------------------------------------------------------------------------*/
+

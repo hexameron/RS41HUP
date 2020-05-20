@@ -17,28 +17,18 @@
 //
 // Modulation Settings - Comment out a line below to disable a modulation.
 //
-#define USE_RTTY
-// 100 baud 7n2 RTTY - 10 chars/second
-//
 #define USE_HORUS
 // 4fsk Horus Binary - 2 second payload
 //
-
-//*************RTTY SETTINGS******************
-#define CALLSIGN "4FSKTEST"
-	// put your RTTY callsign here, max. 15 characters
-#define RTTY_DEVIATION 0x3
-	// RTTY shift = RTTY_DEVIATION x 267Hz
-#define RTTY_7BIT 1
-#define RTTY_USE_2_STOP_BITS   1
-#define RTTY_PRE_START_BITS  32
+#define USE_LDPC
+// 100 Hz 4fsk Short - 2 second payload
+// 	16 bytes; may get longer or slower
 
 //************MFSK Binary Settings************
-// Binary Payload ID (0 though 255) - For your own flights, you will need to choose a payload ID,
+// Binary Payload ID (0 though 32) - For your own flights, you will need to choose a payload ID,
 // and set this value to that. 
 // Refer to the payload ID list here: https://github.com/projecthorus/horusbinary/blob/master/payload_id_list.txt
 #define BINARY_PAYLOAD_ID 0
-
 
 //******************* TX Power ***************
 #define TX_POWER  4
@@ -53,19 +43,19 @@
 // 5 --> 13.1dBm
 // 6 --> 15.0dBm
 // 7 --> 16.3dBm
-//
+
+
+//***********Other Settings ******************
+
 // Delay between transmitted packets at 100 Hz
 #define OFF_TIME 3
 #define TX_DELAY  (100 * OFF_TIME)
 
-// Ignored: Tx is always off between packets.
-#define MFSK_CONTINUOUS 1
+// Send some extra symbols at the start of the packet
+#define PREAMBLE_LENGTH 20
 
-
-//***********Other Settings ******************
 // Switch sonde ON/OFF via Button
 #define ALLOW_DISABLE_BY_BUTTON 1
-
 
 #endif
 

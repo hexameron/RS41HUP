@@ -1,4 +1,4 @@
-#include "util.h"
+#include <util.h>
 
 uint16_t string_CRC16_checksum(char *string) {
   uint16_t crc = 0xffff;
@@ -51,6 +51,12 @@ void print_hex(char *data, uint8_t length, char *tmp) // prints 8-bit data in he
  tmp[length*2] = '\n';
  tmp[length*2+1] = 0;
  // Serial.println(tmp);
+}
+
+void array2gray(uint8_t *data, uint8_t len) {
+	int i;
+	for (i = 0; i < len; i++)
+		data[i] ^= data[i] >> 1;
 }
 
 
