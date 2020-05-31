@@ -85,7 +85,7 @@ uint16_t  Checksum; // CRC16-CCITT Checksum.
 /* Short binary packet */
 #pragma pack(push,1)
 struct SBinaryPacket {
-// 4 byte preamble for high error rates ("ESC,ESC,$,$")
+// 4 byte preamble for high error rates ("0x96696996")
 // All data 8 bit Gray coded (before Checksum)
 //	- to improve soft bit prediction
 uint8_t   PayloadID;	// Legacy list

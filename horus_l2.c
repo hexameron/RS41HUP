@@ -60,9 +60,12 @@
 #include "HRA128_384.h"
 
 
-/* Target is 10% BER, for 10% packet loss. => 32 bit magic word with 4 errors
-	for 36k bits between collisions: 6 minutes at 100 baud. */
+/* Target is 10% BER, for 10% packet loss. => 32 bit magic word with   *
+ *   4 errors for 36k bits between collisions: 6 minutes at 100 baud.  *
+ * LDPC at 1/3 rate aproaches 20% BER => 6 errors in 4 bytes !         */
+
 static const char uw[] = { 0x1b, 0x1b,'$','$' };
+static const char uw_v2[] = { 0x96, 0x69, 0x69, 0x96 };
 
 /* Functions ----------------------------------------------------------*/
 
@@ -200,8 +203,8 @@ int ldpc_encode_packet(unsigned char *out_data, unsigned char *in_data) {
     unsigned int   i, last = 0;
     unsigned char *pout;
     pout = out_data;
-    memcpy(pout, uw, sizeof(uw));
-    pout += sizeof(uw);
+    memcpy(pout, uw_v2, sizeof(uw_v2));
+    pout += sizeof(uw_v2);
     memcpy(pout, in_data, DATA_BYTES);
     pout += DATA_BYTES;
     memset(pout, 0, PARITY_BYTES);
@@ -211,7 +214,10 @@ int ldpc_encode_packet(unsigned char *out_data, unsigned char *in_data) {
         unsigned int shift, j;
 
 	for(j = 0; j < MAX_ROW_WEIGHT; j++) {
-		uint8_t tmp  = H_rows[i + NUMBERPARITYBITS * j] - 1;
+		uint8_t tmp  = H_rows[i + NUMBERPARITYBITS * j];
+		if (!tmp)
+			continue;
+		tmp--;
 		shift = 7 - (tmp & 7); // MSB
 		last ^= in_data[tmp >> 3] >> shift;
 	}
@@ -219,11 +225,11 @@ int ldpc_encode_packet(unsigned char *out_data, unsigned char *in_data) {
 	pout[i >> 3] |= (last & 1) << shift;
     }
 
-    pout = out_data + sizeof(uw);
+    pout = out_data + sizeof(uw_v2);
     interleave(pout, DATA_BYTES + PARITY_BYTES);
     scramble(pout, DATA_BYTES + PARITY_BYTES);
 
-    return DATA_BYTES + PARITY_BYTES + sizeof(uw);
+    return DATA_BYTES + PARITY_BYTES + sizeof(uw_v2);
 }
 
 // single directional for encoding
