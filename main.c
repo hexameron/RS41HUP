@@ -53,6 +53,7 @@ static inline int send_4fsk(char current_char) {
 void TIM2_IRQHandler(void) {
 	static int mfsk_symbol = 0;
 	static int preamble_byte = 20;
+	static int clockcount = 0;
 
 	if ( TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET ) {
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
@@ -79,10 +80,10 @@ void TIM2_IRQHandler(void) {
 			}
 		}
 
-
 		if ( tx_on ) {
-			// Symbol selection logic.
-			if ( (current_mode == DO_HORUS) || (current_mode == DO_LDPC)) {
+			int hz25 = !(++clockcount & 0x03); // divide 100Hz by four
+
+			if ( (current_mode == DO_HORUS) || ( hz25 && (current_mode == DO_LDPC) )) {
 				// 4FSK Symbol Selection Logic
 				mfsk_symbol = send_4fsk(tx_buffer[current_mfsk_byte]);
 
@@ -100,8 +101,8 @@ void TIM2_IRQHandler(void) {
 				if ( mfsk_symbol != -1 ) {
 					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
 				}
-			} else {
-				// Preamble for horus_demod to lock on:
+			} else if (hz25 || (current_mode == SEND_HORUS))  {
+				// Preamble at the same speed as Tx
 				// may be in mode LDPC or BINARY
 				mfsk_symbol = (mfsk_symbol + 1) & 0x03;
 				radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);

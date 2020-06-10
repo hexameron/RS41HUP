@@ -48,8 +48,7 @@
 //***********Other Settings ******************
 
 // Delay between transmitted packets at 100 Hz
-#define OFF_TIME 3
-#define TX_DELAY  (100 * OFF_TIME)
+#define TX_DELAY  (10)
 
 // Send some extra symbols at the start of the packet
 #define PREAMBLE_LENGTH 20
