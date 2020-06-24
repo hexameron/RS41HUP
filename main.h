@@ -43,7 +43,7 @@ int8_t si4032_temperature;
 GPSEntry gpsData;
 
 #define MAX_MFSK (60)
-char buff_mfsk[MAX_MFSK]; // 16 bytes * 3  + 4 = 52
+char buff_mfsk[MAX_MFSK]; // 16 bytes * 3  + 8 = 56
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;

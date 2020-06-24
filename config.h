@@ -28,7 +28,8 @@
 // Binary Payload ID (0 though 32) - For your own flights, you will need to choose a payload ID,
 // and set this value to that. 
 // Refer to the payload ID list here: https://github.com/projecthorus/horusbinary/blob/master/payload_id_list.txt
-#define BINARY_PAYLOAD_ID 0
+#define BINARY_PAYLOAD_ID  0
+#define LDPC_PAYLOAD_ID    4
 
 //******************* TX Power ***************
 #define TX_POWER  4

@@ -32,16 +32,23 @@ void stop_sending() {
 	radio_disable_tx();	// no transmit powersave
 }
 
-static inline int send_4fsk(char current_char) {
+static inline int send_fsk(char current_char) {
 	static uint8_t nibble = 0;
-	int _c = current_char;
+	int m, shift, c;
 
-	if (nibble == 4){
+	if (current_mode == DO_LDPC) {
+		m = 0;	//2fsk
+		shift = 1;
+	} else {
+		m = 1;  //4fsk
+		shift = 3;
+	}
+	if ((nibble << m) > 7){
 		nibble = 0;
 		return -1;
 	} else {
-		_c = _c >> (6  - 2 * nibble++);
-		return _c & 3;
+		c = current_char >> (8  - (++nibble << m));
+		return (c & shift) * (4 - shift);
 	}
 }
 
@@ -81,11 +88,13 @@ void TIM2_IRQHandler(void) {
 		}
 
 		if ( tx_on ) {
-			int hz25 = !(++clockcount & 0x03); // divide 100Hz by four
+			int hz100 = !(clockcount++); // divide 500Hz by five
+				if (clockcount > 4)
+					clockcount = 0;
 
-			if ( (current_mode == DO_HORUS) || ( hz25 && (current_mode == DO_LDPC) )) {
+			if ( (hz100 && (current_mode == DO_HORUS)) || (current_mode == DO_LDPC) ) {
 				// 4FSK Symbol Selection Logic
-				mfsk_symbol = send_4fsk(tx_buffer[current_mfsk_byte]);
+				mfsk_symbol = send_fsk(tx_buffer[current_mfsk_byte]);
 
 				if ( mfsk_symbol == -1 ) {
 					// Reached the end of the current character, increment the current-byte pointer.
@@ -94,18 +103,17 @@ void TIM2_IRQHandler(void) {
 						current_mode++;
 						// DO_LDPC -> SEND_HORUS, or DO_HORUS -> STARTUP
 					} else {
-						mfsk_symbol = send_4fsk(tx_buffer[current_mfsk_byte]);
+						mfsk_symbol = send_fsk(tx_buffer[current_mfsk_byte]);
 					}
 				}
 				// Set the symbol!
 				if ( mfsk_symbol != -1 ) {
 					radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
 				}
-			} else if (hz25 || (current_mode == SEND_HORUS))  {
-				// Preamble at the same speed as Tx
-				// may be in mode LDPC or BINARY
-				mfsk_symbol = (mfsk_symbol + 1) & 0x03;
-				radio_rw_register(0x73, (uint8_t)mfsk_symbol, 1);
+			} else if (hz100)  {
+				// 4fsk Preamble at 100 baud
+				mfsk_symbol = (mfsk_symbol + 1) & 0x3;
+				radio_rw_register(0x73, (uint8_t)(mfsk_symbol), 1);
 				if ( !preamble_byte-- ) {
 					preamble_byte = PREAMBLE_LENGTH;
 					current_mode++;
@@ -199,7 +207,7 @@ void send_ldpc() {
 	int32_t user, sats, temp;
 	struct SBinaryPacket FSK;
 
-	FSK.PayloadID = BINARY_PAYLOAD_ID % 256;
+	FSK.PayloadID = LDPC_PAYLOAD_ID % 256;
 	FSK.Counter = send_count;
 
 	FSK.BiSeconds = 30 * 60 * gpsData.hours
@@ -217,10 +225,6 @@ void send_ldpc() {
 	FSK.Altitude = (uint16_t)last_alt;
 	FSK.Voltage = (uint8_t)(51 * voltage / 100);
 
-	// Legacy 5 bit Payload ID
-	user = BINARY_PAYLOAD_ID & 0x1f;
-	// 5 bits offset 0
-
 	// Six bit temperature: +31C to -32C in 1C steps
 	temp = si4032_temperature;
 	if (temp > 31) temp = 31;
@@ -228,7 +232,7 @@ void send_ldpc() {
 	user = (uint8_t)(temp << 2);
 
 	// rough guide to GPS quality, (0,4,8,12 sats)
-	sats = gpsData.sats_raw >> 2;
+	sats = (gpsData.sats_raw + 1) >> 2;
 	if (sats < 0) sats = 0;
 	if (sats > 3) sats = 3;
 	user |= sats;

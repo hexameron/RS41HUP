@@ -61,11 +61,13 @@
 
 
 /* Target is 10% BER, for 10% packet loss. => 32 bit magic word with   *
- *   4 errors for 36k bits between collisions: 6 minutes at 100 baud.  *
- * LDPC at 1/3 rate aproaches 20% BER => 6 errors in 4 bytes !         */
+ *   4 errors for 36k bits between collisions: ~1 minute at 500 baud.  *
+ * LDPC at 1/3 rate aproaches 20% BER => 6 errors in 4 bytes !         *
+ *   - send 4 extra preamble bytes for V2
+ */
 
 static const char uw[] = { 0x1b, 0x1b,'$','$' };
-static const char uw_v2[] = { 0x96, 0x69, 0x69, 0x96 };
+static const char uw_v2[] = { 0x55, 0x55, 0x55, 0x55, 0x96, 0x69, 0x69, 0x96 };
 
 /* Functions ----------------------------------------------------------*/
 
