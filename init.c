@@ -10,6 +10,7 @@
 #include <misc.h>
 #include "init.h"
 #include "radio.h"
+#include "delay.h"
 
 SPI_InitTypeDef   SPI_InitStructure;
 USART_InitTypeDef USART_InitStructure;
@@ -93,6 +94,23 @@ void RCC_Conf()
 			RCC_SYSCLKConfig(RCC_SYSCLKSource_HSE);
 			while(RCC_GetSYSCLKSource() != 0x04);
   }
+}
+
+void reset_gps()
+{
+	// Force Reset pin low
+	GPIO_Conf.GPIO_Pin = GPIO_Pin_15;
+	GPIO_Conf.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_Conf.GPIO_Speed = GPIO_Speed_10MHz;
+	GPIO_Init(GPIOA, &GPIO_Conf);
+	GPIO_ResetBits(GPIOA, 15);
+
+	// Brief delay
+	 _delay_ms(1);
+
+	// Pull-up Reset pin
+	GPIO_Conf.GPIO_Mode = GPIO_Mode_IPU;
+	GPIO_Init(GPIOA, &GPIO_Conf);
 }
 
 void init_port()

@@ -13,6 +13,8 @@ void init_timer();
 
 void init_usart_gps(const uint32_t speed, const uint8_t enable_irq);
 
+void reset_gps();
+
 void spi_init();
 
 void spi_deinit();

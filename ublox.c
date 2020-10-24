@@ -81,14 +81,9 @@ void ubx_powersave(){
 }
 
 void ublox_init(){
-  /* reset ublox at 9600 baud */
-  uBloxPacket msgcfgrst = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x04, .payloadSize=sizeof(uBloxCFGRSTPayload)},
-      .data.cfgrst = { .navBbrMask=0xffff, .resetMode=1, .reserved1 = 0}
-  };
-
+  /* Hardware reset ublox to 9600 baud */
   init_usart_gps(9600, 1);
-  _delay_ms(10);
-  send_ublox_packet(&msgcfgrst);
+  reset_gps();
   _delay_ms(800);
 
   /* CFG_PRT: turn off all GPS NMEA strings on the uart, switch to 38400 baud rate */
