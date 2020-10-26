@@ -104,11 +104,13 @@ void reset_gps()
 	GPIO_Conf.GPIO_Speed = GPIO_Speed_10MHz;
 	GPIO_Init(GPIOA, &GPIO_Conf);
 	GPIO_ResetBits(GPIOA, 15);
+	GPIO_PinRemapConfig(GPIO_Remap_SWJ_Disable, ENABLE);
 
 	// Brief delay
 	 _delay_ms(1);
 
 	// Pull-up Reset pin
+	GPIO_PinRemapConfig(GPIO_Remap_SWJ_Disable, DISABLE);
 	GPIO_Conf.GPIO_Mode = GPIO_Mode_IPU;
 	GPIO_Init(GPIOA, &GPIO_Conf);
 }
