@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <misc.h>
-#include "f_rtty.h"
 #include "init.h"
 #include "config.h"
 #include "radio.h"
@@ -23,33 +22,27 @@
 #include "mfsk.h"
 #include "horus_l2.h"
 
-// IO Pins Definitions. The state of these pins are initilised in init.c
+// IO Pins Definitions. Active low, initilised in init.c
 #define GREEN  GPIO_Pin_7
-	// Inverted
 #define RED  GPIO_Pin_8
-	// Non-Inverted (?)
 
 // Transmit Modulation Switching
 #define STARTUP 0
-#define RTTY 1
-#define HORUS 2
-#define SEND4FSK 5
+#define HORUS 1
+#define SEND4FSK 2
 volatile int current_mode = STARTUP;
 
-// Telemetry Data to Transmit - used in RTTY & MFSK packet generation functions.
-unsigned int send_count;        //frame counter
-int voltage;
-int8_t si4032_temperature;
-GPSEntry gpsData;
+// Telemetry Data to Transmit - used in packet generation functions.
+unsigned int send_count;	// frame counter
+int voltage;			// battery
+int8_t si4032_temperature;	// radio internal temp
+int16_t lateral, orthogonal;	// ground speed foward and sideways
+uint32_t distance = 0;		// ground speed * time
+int32_t last_lat = 0, last_lon = 0, last_alt = 0;	// persistant data if the GPS loses lock
+GPSEntry gpsData;		// Packet from Ublox GPS
 
-char callsign[15] = {CALLSIGN};
-char status[2] = {'N'};
-uint16_t CRC_rtty = 0x12ab;  //checksum (dummy initial value)
-
-#define MAX_RTTY 90
-#define MAX_MFSK (MAX_RTTY)
-char buf_rtty[MAX_RTTY]; // Usually less than 80 chars
-char buf_mfsk[MAX_MFSK]; // 22 bytes * 23/12 + 2 + 4 = 50
+#define MAX_MFSK 70
+char buf_mfsk[MAX_MFSK]; // 32 bytes * 23/12 + 2 + 4 = 68
 
 // Volatile Variables, used within interrupts.
 volatile int adc_bottom = 2000;
@@ -60,7 +53,6 @@ volatile unsigned int cun = 100; // 1 seconds of green LED at startup
 volatile unsigned char tx_on = 0;
 volatile unsigned int tx_on_delay;
 volatile unsigned char tx_enable = 0;
-rttyStates send_rtty_status = rttyZero;
 volatile char *tx_buffer;
 volatile uint16_t current_mfsk_byte = 0;
 volatile uint16_t packet_length = 0;
@@ -74,7 +66,7 @@ volatile uint8_t disable_armed = 0;
 #pragma pack(push,1) 
 struct TBinaryPacket
 {
-uint8_t   PayloadID;
+uint16_t  PayloadID; // 16 bit for 32 byte payload
 uint16_t  Counter;
 uint8_t   Hours;
 uint8_t   Minutes;
@@ -82,17 +74,21 @@ uint8_t   Seconds;
 int32_t   Latitude;
 int32_t   Longitude;
 uint16_t  Altitude;
-uint8_t   Speed; // Speed in Knots (1-255 knots)
+uint8_t   Speed; // GPS Speed instantaneous  (0-255 kph)
 uint8_t   Sats;
 int8_t    Temp; // -64 to +64; SI4032 internal chip temp.
 uint8_t   BattVoltage; // 0 = 0v, 255 = 5.0V, linear steps in-between.
+int16_t   Vertical;	// ascent rate(+/- 100.00 m/s)
+uint16_t  Lateral;	// average speed (0-100.00 m/s))
+uint16_t  Orthogonal;	// orthogonal speed (0-100.00 m/s)
+uint16_t  Distance;	// distance (0-640.00km)
+int8_t    Heading;	// GPS heading (+/- 1.00)
 uint16_t  Checksum; // CRC16-CCITT Checksum.
-};  //  __attribute__ ((packed)); // Doesn't work?
+}  __attribute__ ((packed));
 #pragma pack(pop)
 
 
 // Function Definitions
 void collect_telemetry_data();
-void send_rtty_packet();
 void send_mfsk_packet();
 

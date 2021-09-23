@@ -76,6 +76,27 @@ int32_t ublox2float(int32_t x){
 	return s|e|m;
 }
 
+// returns hypotenuse of 2D vector
+uint16_t squareroot(int16_t x, int16_t y)
+{
+	uint32_t square;
+	uint16_t result, bit;
+
+	bit = 1 << 14;
+	result = 0;
+	square = x*x + y*y;
+
+	// Cortex M0 has no divide instruction ...
+	do {
+		result |= bit;
+		if ( square < result * result )
+			result ^= bit;
+		bit >>= 1;
+	} while (bit);
+
+	return result;
+}
+
 #if 0
 #include "stdio.h"
 int main() {

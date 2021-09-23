@@ -71,19 +71,7 @@ void TIM2_IRQHandler(void) {
 
 
 		if ( tx_on ) {
-			// RTTY Symbol selection logic.
-			if (current_mode == RTTY) {
-				send_rtty_status = send_rtty( (char *) tx_buffer);
-
-				if ( send_rtty_status == rttyEnd ) {
-					if ( *(++tx_buffer) == 0 )
-						stop_sending();
-				} else if ( send_rtty_status == rttyOne ) {
-					radio_rw_register(0x73, RTTY_DEVIATION, 1);
-				} else if ( send_rtty_status == rttyZero ) {
-					radio_rw_register(0x73, 0x00, 1);
-				}
-			} else if ( current_mode == SEND4FSK ) {
+			if ( current_mode == SEND4FSK ) {
 				// 4FSK Symbol Selection Logic
 				mfsk_symbol = send_mfsk(tx_buffer[current_mfsk_byte]);
 
@@ -160,17 +148,16 @@ int main(void) {
 	// NOTE - LEDs are inverted. (Reset to activate, Set to deactivate)
 	GPIO_SetBits(GPIOB, RED);
 	GPIO_ResetBits(GPIOB, GREEN);
-	for (int i=0; i<5; i++)
-		USART_SendData(USART3, CALLSIGN[i]);
+	// for (int i=0; i<5; i++)
+	//	USART_SendData(USART3, 0x17);
 
 	radio_soft_reset();
-	// setting RTTY TX frequency
 	radio_set_tx_frequency(TRANSMIT_FREQUENCY);
 
 	// setting TX power
 	radio_rw_register(0x6D, 00 | (TX_POWER & 0x0007), 1);
 
-	// initial RTTY modulation
+	// initial modulation
 	radio_rw_register(0x71, 0x00, 1);
 
 	// Temperature Value Offset
@@ -181,7 +168,7 @@ int main(void) {
 
 	// ADC configuration
 	radio_rw_register(0x0f, 0x80, 1);
-	tx_buffer = buf_rtty;
+	tx_buffer = buf_mfsk;
 	tx_on = 0;
 	tx_enable = 1;
 
@@ -196,12 +183,6 @@ int main(void) {
 		// Don't do anything until the previous transmission has finished.
 		if ( tx_on == 0 && tx_enable ) {
 			if ( current_mode == STARTUP ) {
-				current_mode = RTTY;
-		#ifdef USE_RTTY
-				collect_telemetry_data();
-				send_rtty_packet();
-		#endif
-			} else if ( current_mode == RTTY ) {
 				current_mode = HORUS;
 		#ifdef USE_HORUS
 				collect_telemetry_data();
@@ -217,7 +198,33 @@ int main(void) {
 	}
 }
 
-int32_t last_lat = 0, last_lon = 0, last_alt = 0;
+/* You could process this better on the ground, but habhub draws nice graphs in real time */
+void update_motion() {
+	static uint32_t oldtime = 0;
+	uint32_t timenow, pingtime;
+	int16_t  xspeed, yspeed, averagex, averagey; 
+
+	xspeed = gpsData.xspeed;
+	yspeed = gpsData.yspeed;
+	averagex = gpsData.averagex;
+	averagey = gpsData.averagey;
+
+	lateral = squareroot(averagex, averagey);
+	if (lateral > 0)
+		orthogonal = ((averagey * xspeed) - (averagex  * yspeed)) / lateral;
+	else
+		orthogonal = gpsData.speed_raw;
+
+
+	timenow = gpsData.seconds;
+	if (timenow < oldtime)
+		pingtime = 60 + timenow - oldtime;
+	else
+		pingtime = timenow - oldtime;
+	distance += lateral * pingtime;
+	oldtime = timenow;
+}
+
 void collect_telemetry_data() {
 	// Assemble and process the telemetry data we need to construct our RTTY and MFSK packets.
 	send_count++;
@@ -225,9 +232,12 @@ void collect_telemetry_data() {
 	voltage = ADCVal[0] * 600 / 4096;
 	ublox_get_last_data(&gpsData);
 
-	if ( (gpsData.fix >= 3)&&(gpsData.fix < 5) ) {
+	if ( gpsData.fix >= 3 ) {
+#if 0
+		// disable powersave for more precise tracking in v2
 		if (!(send_count & 31))
 			ubx_powersave();
+#endif
 
 		last_lat = gpsData.lat_raw;
 		last_lon = gpsData.lon_raw;
@@ -240,6 +250,10 @@ void collect_telemetry_data() {
 		} else {
 			led_enabled = 2; // flash green when GPS has lock
 		}
+
+		// May fix with 4 sats: first position can be wildly inaccurate.
+		if (gpsData.sats_raw > 4)
+			update_motion();
 	} else {
 		// No GPS fix.
 		led_enabled = 1; // flash red for no GPS fix
@@ -247,51 +261,16 @@ void collect_telemetry_data() {
 }
 
 
-uint8_t fill_string() {
-	// Write a UKHAS format string into the RTTY buffer.
-
-	// Convert raw lat/lon values into degrees and decimal degree values.
-	uint8_t lat_d = (uint8_t) abs(last_lat / 10000000);
-	uint32_t lat_fl = (uint32_t) abs(abs(last_lat / 100) - lat_d * 100000);
-	uint8_t lon_d = (uint8_t) abs(last_lon / 10000000);
-	uint32_t lon_fl = (uint32_t) abs(abs(last_lon / 100) - lon_d * 100000);
-
-	// RTTY Sentence uses same format as Horus Binary, so can use same callsign.
-	sprintf(buf_mfsk, "%s,%d,%02u%02u%02u,%s%d.%05ld,%s%d.%05ld,%d,%d,%d,%d,%d.%02d",
-			callsign,
-			send_count,
-			gpsData.hours, gpsData.minutes, gpsData.seconds,
-			last_lat < 0 ? "-" : "", lat_d, lat_fl,
-			last_lon < 0 ? "-" : "", lon_d, lon_fl,
-			(uint16_t)last_alt,
-			gpsData.bad_packets, // speed
-			gpsData.sats_raw,
-			si4032_temperature,
-			voltage / 100, voltage - 100 * (voltage/ 100)
-			);
-
-	// Calculate and append CRC16 checksum to end of sentence.
-	CRC_rtty = string_CRC16_checksum(buf_mfsk);
-	return snprintf(buf_rtty, MAX_RTTY, "~~~\n$$%s*%04X\n--", buf_mfsk, CRC_rtty);
-}
-
-void send_rtty_packet() {
-	// Write a string into the tx buffer, and start RTTY transmission.
-	fill_string();
-	tx_buffer = buf_rtty;
-	start_bits = RTTY_PRE_START_BITS;
-	start_sending();
-}
-
 
 void send_mfsk_packet(){
 	// Generate a MFSK Binary Packet
 
-	uint8_t volts_scaled = (uint8_t)(51 * voltage / 100);
+	uint8_t volts_scaled = (uint8_t)(51 * voltage / 100);		// 5v in 8bits
+	uint8_t speed_scaled = (uint8_t)(9 * gpsData.speed_raw / 250);	// 100 cm.s => 3.6 kph
 
 	// Assemble a binary packet
 	struct TBinaryPacket BinaryPacket;
-	BinaryPacket.PayloadID = BINARY_PAYLOAD_ID % 256;
+	BinaryPacket.PayloadID = BINARY_PAYLOAD_ID;
 	BinaryPacket.Counter = send_count;
 	BinaryPacket.Hours = gpsData.hours;
 	BinaryPacket.Minutes = gpsData.minutes;
@@ -299,10 +278,16 @@ void send_mfsk_packet(){
 	BinaryPacket.Latitude = ublox2float(last_lat);
 	BinaryPacket.Longitude = ublox2float(last_lon);
 	BinaryPacket.Altitude = (uint16_t)(last_alt);
-	BinaryPacket.Speed = gpsData.bad_packets; //(uint8_t)(9 * gpsData.speed_raw / 2500);
+	BinaryPacket.Speed = speed_scaled;
 	BinaryPacket.BattVoltage = volts_scaled;
 	BinaryPacket.Sats = gpsData.sats_raw;
 	BinaryPacket.Temp = si4032_temperature;
+
+	BinaryPacket.Vertical = (int16_t)gpsData.averagez;
+	BinaryPacket.Lateral = lateral;
+	BinaryPacket.Orthogonal = orthogonal;
+	BinaryPacket.Distance = (uint16_t)(distance / 1000); // convert cm into 10m resolution
+	BinaryPacket.Heading = (int8_t)( gpsData.heading / 180 / 1000 - 100 );
 
 	BinaryPacket.Checksum = (uint16_t)array_CRC16_checksum( (char*)&BinaryPacket,sizeof(BinaryPacket) - 2);
 
@@ -317,26 +302,6 @@ void send_mfsk_packet(){
 	start_sending();
 }
 
-#if 0
-void send_contest_packet(){
-	uint8_t rtty_len;
-	rtty_len = fill_string();
-
-	// Convert rtty string into 4fsk symbols
-	packet_length = 0;
-	memset(buf_mfsk, 0, MAX_MFSK);
-	for (int index = 0; index < rtty_len; index +=2) {
-		// convert two chars at a time
-		if ( current_mode == OLIVIA ) {
-			packet_length += olivia_block( &buf_rtty[index],  &buf_mfsk[packet_length] );
-		} else {
-			packet_length += contestia_block( &buf_rtty[index],  &buf_mfsk[packet_length] );
-		}
-	}
-	tx_buffer = buf_mfsk;
-	start_sending();
-}
-#endif
 
 #ifdef  DEBUG
 void assert_failed(uint8_t* file, uint32_t line){

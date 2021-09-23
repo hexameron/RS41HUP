@@ -11,6 +11,13 @@ typedef struct {
   int32_t lon_raw;
   int32_t alt_raw;
   int32_t speed_raw;
+  int32_t xspeed;
+  int32_t yspeed;
+  int32_t descent;
+  int32_t averagex;
+  int32_t averagey;
+  int32_t averagez;
+  int32_t heading;
   uint8_t sats_raw;
   uint8_t seconds;
   uint8_t minutes;
@@ -33,39 +40,24 @@ typedef struct {
   uint8_t ck_b;
 } uBloxChecksum;
 
+/* NAVPVT is for ublox 7
+ *
+ * typedef struct {
+ * 	...
+ * } uBloxNAVPVTPayload;
+ */
+
 typedef struct {
-  uint32_t iTOW;		//GPS time of week of the navigation epoch. [- ms]
-  uint16_t year;		//Year (UTC) [- y]
-  uint8_t month;		//Month, range 1..12 (UTC) [- month]
-  uint8_t day;		  //Day of month, range 1..31 (UTC) [- d]
-  uint8_t hour;		  //Hour of day, range 0..23 (UTC) [- h]
-  uint8_t min;		  //Minute of hour, range 0..59 (UTC) [- min]
-  uint8_t sec;		  //Seconds of minute, range 0..60 (UTC) [- s]
-  uint8_t valid;		//Validity flags (see graphic below) [- -]
-  uint32_t tAcc;		//Time accuracy estimate (UTC) [- ns]
-  int32_t nano;		  //Fraction of second, range -1e9 .. 1e9 (UTC) [- ns]
-  uint8_t fixType;	//GNSSfix Type: [- -]
-  uint8_t flags;		//Fix status flags (see graphic below) [- -]
-  uint8_t flags2;		//Additional flags (see graphic below) [- -]
-  uint8_t numSV;		//Number of satellites used in Nav Solution [- -]
-  int32_t lon;		  //Longitude [1e-7 deg]
-  int32_t lat;		  //Latitude [1e-7 deg]
-  int32_t height;		//Height above ellipsoid [- mm]
-  int32_t hMSL;		  //Height above mean sea level [- mm]
-  uint32_t hAcc;		//Horizontal accuracy estimate [- mm]
-  uint32_t vAcc;		//Vertical accuracy estimate [- mm]
-  int32_t velN;		  //NED north velocity [- mm/s]
-  int32_t velE;		  //NED east velocity [- mm/s]
-  int32_t velD;		  //NED down velocity [- mm/s]
-  int32_t gSpeed;		//Ground Speed (2-D) [- mm/s]
-  int32_t headMot;	//Heading of motion (2-D) [1e-5 deg]
-  uint32_t sAcc;		//Speed accuracy estimate [- mm/s]
-  uint32_t headAcc;	//Heading accuracy estimate (both motion and vehicle) [1e-5 deg]
-  uint16_t pDOP;		//Position DOP [0.01 -]
-  uint8_t reserved1[6];		//Reserved [- -]
-  int32_t headVeh;	//Heading of vehicle (2-D) [1e-5 deg]
-  uint8_t reserved2[4];		//Reserved [- -]
-} uBloxNAVPVTPayload;
+  uint32_t iTOW;	//GPS time of week of the navigation epoch. [- ms]
+  int32_t velN;		//NED north velocity [- cm/s]
+  int32_t velE;		//NED east velocity [- cm/s]
+  int32_t velD;		//NED down velocity [- cm/s]
+  uint32_t Speed;	//Speed (3-D) [- cm/s]
+  uint32_t gSpeed;	//Ground Speed (2-D) [- cm/s]
+  int32_t heading;	//Heading of motion (2-D) [1e-5 deg]
+  uint32_t sAcc;	//Speed accuracy estimate [- mm/s]
+  uint32_t cAcc;	//Heading accuracy estimate (both motion and vehicle) [1e-5 deg]
+} uBloxNAVNEDPayload;
 
 typedef struct {
   uint32_t iTOW;		//GPS Millisecond Time of Week [- ms]
@@ -181,7 +173,7 @@ typedef struct {
 } uBloxCFGRXMPayload;
 
 typedef union {
-  uBloxNAVPVTPayload navpvt;
+  uBloxNAVNEDPayload navned;
   uBloxCFGPRTPayload cfgprt;
   uBloxCFGMSGPayload cfgmsg;
   uBloxCFGNAV5Payload cfgnav5;

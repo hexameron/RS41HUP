@@ -100,15 +100,26 @@ void ublox_init(){
   uBloxPacket msgcfgmsg = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x01, .payloadSize=sizeof(uBloxCFGMSGPayload)},
     .data.cfgmsg = {.msgClass=0x01, .msgID=0x02, .rate=1}};
 
+  // select messages at 1Hz rate:
+
+  //nav POS
   do {
     send_ublox_packet(&msgcfgmsg);
   } while (!ublox_wait_for_ack());
 
+  //nav SOL
   msgcfgmsg.data.cfgmsg.msgID = 0x6;
   do {
     send_ublox_packet(&msgcfgmsg);
   } while (!ublox_wait_for_ack());
 
+  // nav NED
+  msgcfgmsg.data.cfgmsg.msgID = 0x12;
+  do {
+    send_ublox_packet(&msgcfgmsg);
+  } while (!ublox_wait_for_ack());
+
+  //nav UTC
   msgcfgmsg.data.cfgmsg.msgID = 0x21;
   do {
     send_ublox_packet(&msgcfgmsg);
@@ -162,18 +173,15 @@ void ublox_handle_packet(uBloxPacket *pkt) {
   if (cksum.ck_a != checksum->ck_a || cksum.ck_b != checksum->ck_b) {
     currentGPSData.bad_packets += 1;
   } else {
-
-    if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x07){
-      currentGPSData.ok_packets += 1;
-      currentGPSData.fix = pkt->data.navpvt.fixType;
-      currentGPSData.lat_raw = pkt->data.navpvt.lat;
-      currentGPSData.lon_raw = pkt->data.navpvt.lon;
-      currentGPSData.alt_raw = pkt->data.navpvt.hMSL;
-      currentGPSData.hours = pkt->data.navpvt.hour;
-      currentGPSData.minutes = pkt->data.navpvt.min;
-      currentGPSData.seconds = pkt->data.navpvt.sec;
-      currentGPSData.sats_raw = pkt->data.navpvt.numSV;
-      currentGPSData.speed_raw = pkt->data.navpvt.gSpeed;
+    if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x12){
+      currentGPSData.speed_raw = pkt->data.navned.gSpeed;
+      currentGPSData.xspeed = pkt->data.navned.velN;
+      currentGPSData.yspeed = pkt->data.navned.velE;
+      currentGPSData.descent = pkt->data.navned.velD;
+      currentGPSData.heading = pkt->data.navned.heading;
+      currentGPSData.averagex = (currentGPSData.xspeed + currentGPSData.averagex * 7) >> 3;
+      currentGPSData.averagey = (currentGPSData.yspeed + currentGPSData.averagey * 7) >> 3;
+      currentGPSData.averagez = (-currentGPSData.descent + currentGPSData.averagez * 7) >> 3;
     } else if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x02){
       currentGPSData.ok_packets += 1;
       currentGPSData.lat_raw = pkt->data.navposllh.lat;
